@@ -8,6 +8,8 @@ import {
   ScrollView,
   TextInput,
   Switch,
+  Modal,
+  Alert,
 } from 'react-native';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { Poppins, icons } from '../assets';
@@ -36,11 +38,17 @@ const MenuScreen = ({ partnerStatus }) => {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [selectedItemName, setSelectedItemName] = useState(null);
+  const [editingItem, setEditingItem] = useState(null); // Track item being edited
   const [categories, setCategories] = useState([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({});
   const [configData, setConfigData] = useState(null);
   const [isLoadingConfigData, setIsLoadingConfigData] = useState(true);
+  const [togglingItems, setTogglingItems] = useState(new Set()); // Track items being toggled
+  const [openCategoryMenuId, setOpenCategoryMenuId] = useState(null); // Track which category menu is open
+  const [editingCategory, setEditingCategory] = useState(null); // Track category being edited
+  const [openSubCategoryMenuId, setOpenSubCategoryMenuId] = useState(null); // Track which subcategory menu is open
+  const [editingSubCategory, setEditingSubCategory] = useState(null); // Track subcategory being edited
 
   // Fetch complete catalog from API (categories, subcategories, items, partner info, UI labels)
   const fetchCategories = useCallback(async () => {
@@ -68,6 +76,7 @@ const MenuScreen = ({ partnerStatus }) => {
             name: sub.name,
             description: sub.description || '',
             display_order: sub.display_order || 0,
+            is_active: sub.is_active !== undefined ? sub.is_active : true, // Include is_active for PUT requests
           }));
 
           const items = (categoryObj.menu_items || []).map((item) => ({
@@ -216,6 +225,12 @@ const MenuScreen = ({ partnerStatus }) => {
   };
 
   const toggleItemAvailability = async (categoryId, itemId) => {
+    // Prevent multiple simultaneous toggles for the same item
+    if (togglingItems.has(itemId)) {
+      console.log('⚠️ [MenuScreen] Toggle already in progress for item:', itemId);
+      return;
+    }
+
     // Find the item to get current status
     const category = categories.find(c => c.id === categoryId);
     if (!category) return;
@@ -224,6 +239,10 @@ const MenuScreen = ({ partnerStatus }) => {
     if (!item) return;
     
     const newIsActive = !item.is_active;
+    const previousIsActive = item.is_active;
+    
+    // Mark item as being toggled
+    setTogglingItems(prev => new Set(prev).add(itemId));
     
     // Optimistically update UI
     setCategories((prevCategories) =>
@@ -242,37 +261,89 @@ const MenuScreen = ({ partnerStatus }) => {
       })
     );
 
-    // Update via API - Note: API endpoint for updating item status may not be available yet
-    // For now, we'll update locally and the status will persist when items are fetched from API
-    // TODO: Implement API call once backend endpoint is available
+    // Update via API
     try {
-      // Try the most likely endpoint format
-      const url = `${API_BASE_URL}v1/catalog/items/${itemId}`;
-      console.log('📡 [MenuScreen] Attempting to update item status:', url);
+      const url = `${API_BASE_URL}v1/catalog/items/${itemId}/status`;
+      console.log('📡 [MenuScreen] Updating item status:', url);
+      console.log('📤 [MenuScreen] Request body:', JSON.stringify({ isActive: newIsActive }, null, 2));
       
       const response = await fetchWithAuth(url, {
         method: 'PATCH',
         body: JSON.stringify({
-          is_active: newIsActive,
+          isActive: newIsActive,
         }),
       });
 
       const data = await response.json();
       console.log('📥 [MenuScreen] Update Item Status API Response:', JSON.stringify(data, null, 2));
 
-      if (response.ok && (data.code === 200 || data.code === 201) && data.status === 'success') {
-        // Success - UI already updated optimistically
+      if (response.ok && data.code === 200 && data.status === 'success') {
+        // Success - update state with API response to ensure sync
+        setCategories((prevCategories) =>
+          prevCategories.map((category) => {
+            if (category.id === categoryId) {
+              return {
+                ...category,
+                items: category.items.map((item) =>
+                  item.id === itemId
+                    ? { ...item, is_active: data.data?.is_active ?? newIsActive }
+                    : item
+                ),
+              };
+            }
+            return category;
+          })
+        );
         showToast(`Item ${newIsActive ? 'activated' : 'deactivated'} successfully`, 'success');
       } else {
-        // API endpoint not available - status updated locally only
-        // The change will persist in UI until page refresh
-        console.warn('⚠️ [MenuScreen] Item status update API endpoint not available. Status updated locally.');
-        // Don't show toast to avoid spam - the toggle works locally
+        // Revert optimistic update on error
+        setCategories((prevCategories) =>
+          prevCategories.map((category) => {
+            if (category.id === categoryId) {
+              return {
+                ...category,
+                items: category.items.map((item) =>
+                  item.id === itemId
+                    ? { ...item, is_active: previousIsActive }
+                    : item
+                ),
+              };
+            }
+            return category;
+          })
+        );
+        
+        const errorMessage = data.message || 'Failed to update item status';
+        console.error('❌ [MenuScreen] Failed to update item status:', errorMessage);
+        showToast(errorMessage, 'error');
       }
     } catch (error) {
-      // API endpoint not available - status updated locally only
-      console.warn('⚠️ [MenuScreen] Item status update API not available:', error.message);
-      // Don't show toast to avoid spam - the toggle works locally
+      // Revert optimistic update on error
+      setCategories((prevCategories) =>
+        prevCategories.map((category) => {
+          if (category.id === categoryId) {
+            return {
+              ...category,
+              items: category.items.map((item) =>
+                item.id === itemId
+                  ? { ...item, is_active: previousIsActive }
+                  : item
+              ),
+            };
+          }
+          return category;
+        })
+      );
+      
+      console.error('❌ [MenuScreen] Error updating item status:', error);
+      showToast('Failed to update item status', 'error');
+    } finally {
+      // Remove item from toggling set
+      setTogglingItems(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
     }
   };
 
@@ -282,50 +353,95 @@ const MenuScreen = ({ partnerStatus }) => {
 
   const handleSaveCategory = async (categoryData) => {
     try {
-      const url = `${API_BASE_URL}v1/catalog/categories`;
-      console.log('📡 [MenuScreen] Creating category:', url);
+      const isEditing = !!editingCategory;
+      const url = isEditing 
+        ? `${API_BASE_URL}v1/catalog/categories/${editingCategory.id}`
+        : `${API_BASE_URL}v1/catalog/categories`;
+      
+      const method = isEditing ? 'PUT' : 'POST';
+      
+      console.log(`📡 [MenuScreen] ${isEditing ? 'Updating' : 'Creating'} category:`, url);
       console.log('📤 [MenuScreen] Category Data:', JSON.stringify(categoryData, null, 2));
+      console.log('📤 [MenuScreen] Editing Category ID:', isEditing ? editingCategory.id : 'N/A');
+      console.log('📤 [MenuScreen] Method:', method);
+
+      // For PUT requests, send all required fields
+      const requestBody = {
+        name: categoryData.name?.trim() || '',
+        description: categoryData.description?.trim() || '',
+        display_order: categoryData.display_order !== undefined && categoryData.display_order !== null 
+          ? parseInt(categoryData.display_order) 
+          : 0,
+      };
+
+      console.log('📤 [MenuScreen] Request Body (final):', JSON.stringify(requestBody, null, 2));
 
       const response = await fetchWithAuth(url, {
-        method: 'POST',
-        body: JSON.stringify(categoryData),
+        method: method,
+        body: JSON.stringify(requestBody),
       });
 
-      const data = await response.json();
-      console.log('📥 [MenuScreen] Create Category API Response:', JSON.stringify(data, null, 2));
+      console.log(`📡 [MenuScreen] Response Status: ${response.status}`);
+      console.log(`📡 [MenuScreen] Response OK: ${response.ok}`);
 
-      if (response.ok && data.code === 201 && data.status === 'success') {
-        showToast('Category created successfully', 'success');
+      let data;
+      try {
+        const responseText = await response.text();
+        console.log(`📥 [MenuScreen] Raw Response Text:`, responseText);
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('❌ [MenuScreen] Failed to parse response:', parseError);
+        showToast('Invalid response from server', 'error');
+        return;
+      }
+      
+      console.log(`📥 [MenuScreen] ${isEditing ? 'Update' : 'Create'} Category API Response:`, JSON.stringify(data, null, 2));
+
+      const successCode = isEditing ? 200 : 201;
+      // Check for success response format: { code: 200/201, status: 'success' }
+      const isSuccess = response.ok && data.code === successCode && data.status === 'success';
+      
+      if (isSuccess) {
+        showToast(`Category ${isEditing ? 'updated' : 'created'} successfully`, 'success');
+        
+        // Reset editing state
+        setEditingCategory(null);
         
         // Refresh categories list
         await fetchCategories();
       } else {
-        // Handle error responses (409, 400, etc.)
-        const errorMessage = data.message || data.error || 'Failed to create category';
-        console.error('❌ [MenuScreen] Failed to create category:', errorMessage);
+        // Handle different error response formats
+        // Format 1: { code: 400, status: 'error', message: '...' }
+        // Format 2: { status: 500, error: '...', message: '...' } (Spring Boot error format)
+        // Format 3: { message: '...', error: '...' }
+        const errorMessage = data.message || data.error || `Failed to ${isEditing ? 'update' : 'create'} category`;
+        const errorStatus = data.status || response.status;
+        console.error(`❌ [MenuScreen] Failed to ${isEditing ? 'update' : 'create'} category:`, errorMessage);
+        console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
         showToast(errorMessage, 'error');
       }
     } catch (error) {
-      console.error('❌ [MenuScreen] Error creating category:', error);
-      showToast('Failed to create category', 'error');
+      console.error(`❌ [MenuScreen] Error ${editingCategory ? 'updating' : 'creating'} category:`, error);
+      showToast(`Failed to ${editingCategory ? 'update' : 'create'} category`, 'error');
     }
   };
 
   const handleAddItem = (categoryId) => {
     setSelectedCategoryId(categoryId);
+    setSelectedItemId(null);
+    setEditingItem(null);
     setShowItemDetails(true);
   };
 
   const handleSaveItem = async (itemData) => {
-    if (!selectedCategoryId) {
+    const isEditing = !!editingItem;
+    
+    if (!selectedCategoryId && !isEditing) {
       showToast('Category not selected', 'error');
       return;
     }
 
     try {
-      const url = `${API_BASE_URL}v1/catalog/categories/${selectedCategoryId}/items`;
-      console.log('📡 [MenuScreen] Creating item:', url);
-      
       // Prepare API payload
       // Handle sub_category_id - convert object to null if empty or invalid
       let subCategoryId = null;
@@ -347,35 +463,55 @@ const MenuScreen = ({ partnerStatus }) => {
         gst_rate: itemData.gst_rate || 'GST_0',
         sub_category_id: subCategoryId,
         display_order: itemData.display_order || 0,
-        image_urls: [],
+        is_active: editingItem?.is_active !== undefined ? editingItem.is_active : true,
       };
+
+      let url;
+      let method;
+      
+      if (isEditing && selectedItemId) {
+        // Update existing item
+        url = `${API_BASE_URL}v1/catalog/items/${selectedItemId}`;
+        method = 'PUT';
+        console.log('📡 [MenuScreen] Updating item:', url);
+      } else {
+        // Create new item
+        url = `${API_BASE_URL}v1/catalog/categories/${selectedCategoryId}/items`;
+        method = 'POST';
+        console.log('📡 [MenuScreen] Creating item:', url);
+      }
 
       console.log('📤 [MenuScreen] Item Data:', JSON.stringify(apiPayload, null, 2));
 
       const response = await fetchWithAuth(url, {
-        method: 'POST',
+        method: method,
         body: JSON.stringify(apiPayload),
       });
 
       const data = await response.json();
-      console.log('📥 [MenuScreen] Create Item API Response:', JSON.stringify(data, null, 2));
+      console.log(`📥 [MenuScreen] ${isEditing ? 'Update' : 'Create'} Item API Response:`, JSON.stringify(data, null, 2));
 
-      if (response.ok && data.code === 201 && data.status === 'success') {
-        showToast('Item created successfully', 'success');
+      const successCode = isEditing ? 200 : 201;
+      if (response.ok && data.code === successCode && data.status === 'success') {
+        showToast(`Item ${isEditing ? 'updated' : 'created'} successfully`, 'success');
         
-        // Refresh categories list to get the new item
+        // Reset editing state
+        setEditingItem(null);
+        
+        // Refresh categories list to get the updated/new item
         await fetchCategories();
       } else {
         // Handle error responses (409, 400, etc.)
-        const errorMessage = data.message || data.error || 'Failed to create item';
-        console.error('❌ [MenuScreen] Failed to create item:', errorMessage);
+        const errorMessage = data.message || data.error || `Failed to ${isEditing ? 'update' : 'create'} item`;
+        console.error(`❌ [MenuScreen] Failed to ${isEditing ? 'update' : 'create'} item:`, errorMessage);
         showToast(errorMessage, 'error');
       }
     } catch (error) {
-      console.error('❌ [MenuScreen] Error creating item:', error);
-      showToast('Failed to create item', 'error');
+      console.error(`❌ [MenuScreen] Error ${editingItem ? 'updating' : 'creating'} item:`, error);
+      showToast(`Failed to ${editingItem ? 'update' : 'create'} item`, 'error');
     } finally {
       setSelectedCategoryId(null);
+      setSelectedItemId(null);
     }
   };
 
@@ -391,34 +527,135 @@ const MenuScreen = ({ partnerStatus }) => {
     }
 
     try {
-      const url = `${API_BASE_URL}v1/catalog/categories/${selectedCategoryId}/subcategories`;
-      console.log('📡 [MenuScreen] Creating sub-category:', url);
+      const isEditing = !!editingSubCategory;
+      const url = isEditing
+        ? `${API_BASE_URL}v1/catalog/categories/${selectedCategoryId}/subcategories/${editingSubCategory.id}`
+        : `${API_BASE_URL}v1/catalog/categories/${selectedCategoryId}/subcategories`;
+      
+      const method = isEditing ? 'PUT' : 'POST';
+      
+      console.log(`📡 [MenuScreen] ${isEditing ? 'Updating' : 'Creating'} sub-category:`, url);
       console.log('📤 [MenuScreen] Sub-Category Data:', JSON.stringify(subCategoryData, null, 2));
 
+      // For PUT requests, include is_active field (required for updates)
+      const requestBody = isEditing
+        ? {
+            name: subCategoryData.name?.trim() || '',
+            description: subCategoryData.description?.trim() || '',
+            display_order: subCategoryData.display_order !== undefined && subCategoryData.display_order !== null 
+              ? parseInt(subCategoryData.display_order) 
+              : 0,
+            is_active: editingSubCategory.is_active !== undefined ? editingSubCategory.is_active : true, // Preserve existing is_active or default to true
+          }
+        : subCategoryData;
+
+      console.log('📤 [MenuScreen] Request Body (final):', JSON.stringify(requestBody, null, 2));
+
       const response = await fetchWithAuth(url, {
-        method: 'POST',
-        body: JSON.stringify(subCategoryData),
+        method: method,
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
-      console.log('📥 [MenuScreen] Create Sub-Category API Response:', JSON.stringify(data, null, 2));
+      console.log(`📥 [MenuScreen] ${isEditing ? 'Update' : 'Create'} Sub-Category API Response:`, JSON.stringify(data, null, 2));
 
-      if (response.ok && data.code === 201 && data.status === 'success') {
-        showToast('Sub-category created successfully', 'success');
+      const successCode = isEditing ? 200 : 201;
+      // Check for success response format: { code: 200/201, status: 'success' }
+      const isSuccess = response.ok && data.code === successCode && data.status === 'success';
+      
+      if (isSuccess) {
+        showToast(`Sub-category ${isEditing ? 'updated' : 'created'} successfully`, 'success');
+        
+        // Reset editing state
+        setEditingSubCategory(null);
         
         // Refresh categories list
         await fetchCategories();
       } else {
-        // Handle error responses (409, 400, etc.)
-        const errorMessage = data.message || data.error || 'Failed to create sub-category';
-        console.error('❌ [MenuScreen] Failed to create sub-category:', errorMessage);
+        // Handle different error response formats
+        // Format 1: { code: 400, status: 'error', message: '...' }
+        // Format 2: { status: 500, error: '...', message: '...' } (Spring Boot error format)
+        // Format 3: { message: '...', error: '...' }
+        const errorMessage = data.message || data.error || `Failed to ${isEditing ? 'update' : 'create'} sub-category`;
+        const errorStatus = data.status || response.status;
+        console.error(`❌ [MenuScreen] Failed to ${isEditing ? 'update' : 'create'} sub-category:`, errorMessage);
+        console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
         showToast(errorMessage, 'error');
       }
     } catch (error) {
-      console.error('❌ [MenuScreen] Error creating sub-category:', error);
-      showToast('Failed to create sub-category', 'error');
+      console.error(`❌ [MenuScreen] Error ${editingSubCategory ? 'updating' : 'creating'} sub-category:`, error);
+      showToast(`Failed to ${editingSubCategory ? 'update' : 'create'} sub-category`, 'error');
     } finally {
       setSelectedCategoryId(null);
+    }
+  };
+
+  const handleSubCategoryMenu = (subCategoryId) => {
+    // Toggle menu - if already open for this subcategory, close it; otherwise open it
+    setOpenSubCategoryMenuId(openSubCategoryMenuId === subCategoryId ? null : subCategoryId);
+  };
+
+  const handleEditSubCategory = (categoryId, subCategoryId) => {
+    const category = categories.find(c => c.id === categoryId);
+    const subCategory = category?.subCategories.find(sc => sc.id === subCategoryId);
+    if (subCategory) {
+      setEditingSubCategory({ ...subCategory, categoryId });
+      setSelectedCategoryId(categoryId);
+      setOpenSubCategoryMenuId(null);
+      setShowCreateSubCategoryModal(true);
+    }
+  };
+
+  const handleDeleteSubCategory = (categoryId, subCategoryId) => {
+    const category = categories.find(c => c.id === categoryId);
+    const subCategory = category?.subCategories.find(sc => sc.id === subCategoryId);
+    if (subCategory) {
+      Alert.alert(
+        'Delete Sub-Category',
+        `Are you sure you want to delete "${subCategory.name}"? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setOpenSubCategoryMenuId(null) },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const url = `${API_BASE_URL}v1/catalog/categories/${categoryId}/subcategories/${subCategoryId}`;
+                console.log('📡 [MenuScreen] Deleting sub-category:', url);
+                
+                const response = await fetchWithAuth(url, {
+                  method: 'DELETE',
+                });
+
+                const data = await response.json();
+                console.log('📥 [MenuScreen] Delete Sub-Category API Response:', JSON.stringify(data, null, 2));
+
+                // Check for success response format: { code: 200, status: 'success' }
+                const isSuccess = response.ok && data.code === 200 && data.status === 'success';
+                
+                if (isSuccess) {
+                  showToast('Sub-category deleted successfully', 'success');
+                  setOpenSubCategoryMenuId(null);
+                  // Refresh categories list
+                  await fetchCategories();
+                } else {
+                  // Handle different error response formats
+                  const errorMessage = data.message || data.error || 'Failed to delete sub-category';
+                  const errorStatus = data.status || response.status;
+                  console.error('❌ [MenuScreen] Failed to delete sub-category:', errorMessage);
+                  console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
+                  showToast(errorMessage, 'error');
+                  setOpenSubCategoryMenuId(null);
+                }
+              } catch (error) {
+                console.error('❌ [MenuScreen] Error deleting sub-category:', error);
+                showToast('Failed to delete sub-category', 'error');
+                setOpenSubCategoryMenuId(null);
+              }
+            },
+          },
+        ]
+      );
     }
   };
 
@@ -550,13 +787,86 @@ const MenuScreen = ({ partnerStatus }) => {
   };
 
   const handleEditItem = (categoryId, itemId) => {
-    // Will be implemented with API
-    console.log('Edit item:', categoryId, itemId);
+    // Find the item to get its data
+    const category = categories.find(c => c.id === categoryId);
+    const item = category?.items.find(i => i.id === itemId);
+    
+    if (item) {
+      // Set up editing state
+      setEditingItem({
+        ...item,
+        categoryId: categoryId,
+      });
+      setSelectedCategoryId(categoryId);
+      setSelectedItemId(itemId);
+      setShowItemDetails(true);
+    }
   };
 
   const handleCategoryMenu = (categoryId) => {
-    // Will be implemented with API
-    console.log('Category menu:', categoryId);
+    // Toggle menu - if already open for this category, close it; otherwise open it
+    setOpenCategoryMenuId(openCategoryMenuId === categoryId ? null : categoryId);
+  };
+
+  const handleEditCategory = (categoryId) => {
+    const category = categories.find(c => c.id === categoryId);
+    if (category) {
+      setEditingCategory(category);
+      setOpenCategoryMenuId(null);
+      setShowCreateCategoryModal(true);
+    }
+  };
+
+  const handleDeleteCategory = (categoryId) => {
+    const category = categories.find(c => c.id === categoryId);
+    if (category) {
+      Alert.alert(
+        'Delete Category',
+        `Are you sure you want to delete "${category.name}"? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setOpenCategoryMenuId(null) },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                const url = `${API_BASE_URL}v1/catalog/categories/${categoryId}`;
+                console.log('📡 [MenuScreen] Deleting category:', url);
+                
+                const response = await fetchWithAuth(url, {
+                  method: 'DELETE',
+                });
+
+                const data = await response.json();
+                console.log('📥 [MenuScreen] Delete Category API Response:', JSON.stringify(data, null, 2));
+
+                // Check for success response format: { code: 200, status: 'success' }
+                const isSuccess = response.ok && data.code === 200 && data.status === 'success';
+                
+                if (isSuccess) {
+                  showToast('Category deleted successfully', 'success');
+                  setOpenCategoryMenuId(null);
+                  // Refresh categories list
+                  await fetchCategories();
+                } else {
+                  // Handle different error response formats
+                  const errorMessage = data.message || data.error || 'Failed to delete category';
+                  const errorStatus = data.status || response.status;
+                  console.error('❌ [MenuScreen] Failed to delete category:', errorMessage);
+                  console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
+                  showToast(errorMessage, 'error');
+                  setOpenCategoryMenuId(null);
+                }
+              } catch (error) {
+                console.error('❌ [MenuScreen] Error deleting category:', error);
+                showToast('Failed to delete category', 'error');
+                setOpenCategoryMenuId(null);
+              }
+            },
+          },
+        ]
+      );
+    }
   };
 
   const handleCreateAddon = () => {
@@ -645,9 +955,12 @@ const MenuScreen = ({ partnerStatus }) => {
         onBack={() => {
           setShowItemDetails(false);
           setSelectedCategoryId(null);
+          setSelectedItemId(null);
+          setEditingItem(null);
         }}
         categoryId={selectedCategoryId}
         onSave={handleSaveItem}
+        itemData={editingItem}
         subCategories={categories.find(c => c.id === selectedCategoryId)?.subCategories || []}
       />
     );
@@ -809,17 +1122,40 @@ const MenuScreen = ({ partnerStatus }) => {
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.categoryMenuButton}
-                  onPress={() => handleCategoryMenu(category.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.threeDots}>
-                    <View style={styles.dot} />
-                    <View style={styles.dot} />
-                    <View style={styles.dot} />
-                  </View>
-                </TouchableOpacity>
+                <View style={styles.menuButtonContainer}>
+                  <TouchableOpacity
+                    style={styles.categoryMenuButton}
+                    onPress={() => handleCategoryMenu(category.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.threeDots}>
+                      <View style={styles.dot} />
+                      <View style={styles.dot} />
+                      <View style={styles.dot} />
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {/* Category Menu Box */}
+                  {openCategoryMenuId === category.id && (
+                    <View style={styles.categoryMenuBox}>
+                      <TouchableOpacity
+                        style={styles.menuOption}
+                        onPress={() => handleEditCategory(category.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.menuOptionText}>Edit</Text>
+                      </TouchableOpacity>
+                      <View style={styles.menuDivider} />
+                      <TouchableOpacity
+                        style={styles.menuOption}
+                        onPress={() => handleDeleteCategory(category.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.menuOptionTextDelete}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
               </View>
 
               {/* Category Content */}
@@ -862,12 +1198,50 @@ const MenuScreen = ({ partnerStatus }) => {
                         
                         return (
                           <View key={subCategory.id} style={styles.subCategoryItem}>
-                            <Text style={styles.subCategoryName}>{subCategory.name}</Text>
-                            {subCategory.description && (
-                              <Text style={styles.subCategoryDescription}>
-                                {subCategory.description}
-                              </Text>
-                            )}
+                            <View style={styles.subCategoryHeader}>
+                              <View style={styles.subCategoryHeaderLeft}>
+                                <Text style={styles.subCategoryName}>{subCategory.name}</Text>
+                                {subCategory.description && (
+                                  <Text style={styles.subCategoryDescription}>
+                                    {subCategory.description}
+                                  </Text>
+                                )}
+                              </View>
+                              <View style={styles.menuButtonContainer}>
+                                <TouchableOpacity
+                                  style={styles.categoryMenuButton}
+                                  onPress={() => handleSubCategoryMenu(subCategory.id)}
+                                  activeOpacity={0.7}
+                                >
+                                  <View style={styles.threeDots}>
+                                    <View style={styles.dot} />
+                                    <View style={styles.dot} />
+                                    <View style={styles.dot} />
+                                  </View>
+                                </TouchableOpacity>
+                                
+                                {/* Sub-Category Menu Box */}
+                                {openSubCategoryMenuId === subCategory.id && (
+                                  <View style={styles.categoryMenuBox}>
+                                    <TouchableOpacity
+                                      style={styles.menuOption}
+                                      onPress={() => handleEditSubCategory(category.id, subCategory.id)}
+                                      activeOpacity={0.7}
+                                    >
+                                      <Text style={styles.menuOptionText}>Edit</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.menuDivider} />
+                                    <TouchableOpacity
+                                      style={styles.menuOption}
+                                      onPress={() => handleDeleteSubCategory(category.id, subCategory.id)}
+                                      activeOpacity={0.7}
+                                    >
+                                      <Text style={styles.menuOptionTextDelete}>Delete</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
                             {subCategoryItems.length > 0 && (
                               <View style={styles.subCategoryItemsContainer}>
                                 {subCategoryItems.map((item) => (
@@ -917,6 +1291,7 @@ const MenuScreen = ({ partnerStatus }) => {
                                           onValueChange={() =>
                                             toggleItemAvailability(category.id, item.id)
                                           }
+                                          disabled={togglingItems.has(item.id)}
                                           trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
                                           thumbColor="#FFFFFF"
                                           ios_backgroundColor="#E0E0E0"
@@ -997,6 +1372,7 @@ const MenuScreen = ({ partnerStatus }) => {
                             onValueChange={() =>
                               toggleItemAvailability(category.id, item.id)
                             }
+                            disabled={togglingItems.has(item.id)}
                             trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
                             thumbColor="#FFFFFF"
                             ios_backgroundColor="#E0E0E0"
@@ -1032,11 +1408,15 @@ const MenuScreen = ({ partnerStatus }) => {
         )}
       </View>
 
-      {/* Create Category Modal */}
+      {/* Create/Edit Category Modal */}
       <CreateCategoryBottomSheet
         visible={showCreateCategoryModal}
-        onClose={() => setShowCreateCategoryModal(false)}
+        onClose={() => {
+          setShowCreateCategoryModal(false);
+          setEditingCategory(null);
+        }}
         onSave={handleSaveCategory}
+        categoryData={editingCategory}
       />
 
       {/* Create Sub-Category Modal */}
@@ -1045,9 +1425,11 @@ const MenuScreen = ({ partnerStatus }) => {
         onClose={() => {
           setShowCreateSubCategoryModal(false);
           setSelectedCategoryId(null);
+          setEditingSubCategory(null);
         }}
         onSave={handleSaveSubCategory}
         categoryName={categories.find(c => c.id === selectedCategoryId)?.name || ''}
+        subCategoryData={editingSubCategory}
       />
 
       {/* Add Photo Modal */}
@@ -1279,6 +1661,48 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#000000',
   },
+  menuButtonContainer: {
+    position: 'relative',
+  },
+  categoryMenuBox: {
+    position: 'absolute',
+    top: 36,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    paddingVertical: 4,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  menuOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  menuOptionText: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#000000',
+  },
+  menuOptionTextDelete: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#FF4444',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginVertical: 0,
+  },
   categoryContent: {
     paddingLeft: 0,
   },
@@ -1469,6 +1893,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingBottom: 0,
     borderBottomWidth: 0,
+  },
+  subCategoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  subCategoryHeaderLeft: {
+    flex: 1,
+    marginRight: 8,
   },
   subCategoryName: {
     fontFamily: Poppins.semiBold,

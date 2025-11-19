@@ -17,11 +17,11 @@ import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
-const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceived, onLogout, initialTab }) => {
+const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceived, onLogout, initialTab, initialBottomTab, onNavigate }) => {
   const { showToast } = useToast();
   const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState(initialTab || 'preparing');
-  const [activeBottomTab, setActiveBottomTab] = useState('orders');
+  const [activeBottomTab, setActiveBottomTab] = useState(initialBottomTab || 'orders');
   const [orderCount, setOrderCount] = useState(5); // Example order count
   const [showNewOrdersModal, setShowNewOrdersModal] = useState(false);
   const [pendingOrders, setPendingOrders] = useState([]);
@@ -33,11 +33,63 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   const tabsScrollViewRef = useRef(null);
   const tabPositions = useRef({});
 
+  // Update activeBottomTab when initialBottomTab prop changes
+  useEffect(() => {
+    if (initialBottomTab) {
+      console.log('📡 [OrdersScreen] ========================================');
+      console.log('📡 [OrdersScreen] INITIAL BOTTOM TAB RECEIVED');
+      console.log('📡 [OrdersScreen] ========================================');
+      console.log('📡 [OrdersScreen] Initial Bottom Tab:', initialBottomTab);
+      console.log('📡 [OrdersScreen] Current Bottom Tab:', activeBottomTab);
+      
+      setActiveBottomTab(initialBottomTab);
+      console.log('✅ [OrdersScreen] Active bottom tab set to:', initialBottomTab);
+      console.log('📡 [OrdersScreen] ========================================');
+    }
+  }, [initialBottomTab]);
+
   // Update activeTab when initialTab prop changes
   useEffect(() => {
     if (initialTab) {
-      console.log('📡 [OrdersScreen] Setting initial tab to:', initialTab);
+      console.log('📡 [OrdersScreen] ========================================');
+      console.log('📡 [OrdersScreen] INITIAL TAB RECEIVED');
+      console.log('📡 [OrdersScreen] ========================================');
+      console.log('📡 [OrdersScreen] Initial Tab:', initialTab);
+      console.log('📡 [OrdersScreen] Current Active Tab:', activeTab);
+      console.log('📡 [OrdersScreen] Current Bottom Tab:', activeBottomTab);
+      
+      // Reset bottom tab to 'orders' if we're coming from MoreScreen (unless initialBottomTab is set)
+      if (activeBottomTab !== 'orders' && !initialBottomTab) {
+        console.log('📍 [OrdersScreen] Resetting bottom tab from', activeBottomTab, 'to orders');
+        setActiveBottomTab('orders');
+      }
+      
       setActiveTab(initialTab);
+      console.log('✅ [OrdersScreen] Active tab set to:', initialTab);
+      
+      // Scroll to the selected tab after a delay to ensure layout is complete
+      // Try multiple times with increasing delays in case layout isn't ready
+      const scrollToTab = (attempt = 1) => {
+        setTimeout(() => {
+          if (tabsScrollViewRef.current && tabPositions.current[initialTab] !== undefined) {
+            const scrollX = tabPositions.current[initialTab] - 20;
+            tabsScrollViewRef.current.scrollTo({
+              x: scrollX,
+              animated: true,
+            });
+            console.log('✅ [OrdersScreen] Scrolled to tab:', initialTab, 'at position:', scrollX);
+          } else {
+            console.log(`⚠️  [OrdersScreen] Tab position not available (attempt ${attempt})`);
+            // Retry up to 3 times with increasing delays
+            if (attempt < 3) {
+              scrollToTab(attempt + 1);
+            }
+          }
+        }, attempt * 200); // 200ms, 400ms, 600ms
+      };
+      
+      scrollToTab();
+      console.log('📡 [OrdersScreen] ========================================');
     }
   }, [initialTab]);
 
@@ -423,7 +475,18 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
           <MoreScreen 
             partnerStatus={partnerStatus} 
             onLogout={onLogout}
-            onNavigate={onNavigate}
+            onNavigate={(screen) => {
+              console.log('📡 [OrdersScreen] Navigation requested from MoreScreen:', screen);
+              // If navigating to pastOrders, reset bottom tab to orders first
+              if (screen === 'pastOrders') {
+                console.log('📍 [OrdersScreen] Resetting bottom tab to orders before navigation');
+                setActiveBottomTab('orders');
+              }
+              // Then call the parent's onNavigate
+              if (onNavigate) {
+                onNavigate(screen);
+              }
+            }}
             configData={configData}
           />
         </View>

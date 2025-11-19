@@ -302,23 +302,50 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
     }
   };
 
+  // Get UI labels from config with fallbacks
+  const getUILabel = (key, fallback) => {
+    return configData?.logout_labels?.[key] || 
+           configData?.ui_labels?.[key] || 
+           fallback;
+  };
+
   const handleLogout = () => {
+    console.log('📡 [MoreScreen] ========================================');
+    console.log('📡 [MoreScreen] LOGOUT BUTTON PRESSED');
+    console.log('📡 [MoreScreen] ========================================');
+    console.log('📋 [MoreScreen] Logout Section Data:', JSON.stringify(moreData?.logout_section?.[0], null, 2));
+    console.log('📋 [MoreScreen] Config Data Available:', !!configData);
+    console.log('📋 [MoreScreen] Logout Labels Available:', !!configData?.logout_labels);
+    
+    // Get dynamic labels with fallbacks
+    const logoutTitle = getUILabel('logout_title', 'Logout');
+    const logoutMessage = getUILabel('logout_confirmation_message', 'Are you sure you want to logout?');
+    const cancelButton = getUILabel('cancel_button', 'Cancel');
+    const logoutButton = getUILabel('logout_button', 'Logout');
+    
+    console.log('📋 [MoreScreen] Using Logout Title:', logoutTitle);
+    console.log('📋 [MoreScreen] Using Logout Message:', logoutMessage);
+    console.log('📋 [MoreScreen] Using Cancel Button:', cancelButton);
+    console.log('📋 [MoreScreen] Using Logout Button:', logoutButton);
+    console.log('📡 [MoreScreen] ========================================');
+    
     // Show confirmation popup before logging out
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      logoutTitle,
+      logoutMessage,
       [
         {
-          text: 'Cancel',
+          text: cancelButton,
           style: 'cancel',
           onPress: () => {
             console.log('📡 [MoreScreen] Logout cancelled by user');
           },
         },
         {
-          text: 'Logout',
+          text: logoutButton,
           style: 'destructive',
           onPress: async () => {
+            console.log('📡 [MoreScreen] User confirmed logout');
             await performLogout();
           },
         },
@@ -331,37 +358,76 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
     try {
       setIsLoggingOut(true);
       
+      console.log('📡 [MoreScreen] ========================================');
+      console.log('📡 [MoreScreen] PERFORMING LOGOUT');
+      console.log('📡 [MoreScreen] ========================================');
+      console.log('📋 [MoreScreen] More Data Available:', !!moreData);
+      console.log('📋 [MoreScreen] Logout Section Available:', !!moreData?.logout_section);
+      console.log('📋 [MoreScreen] Logout Section Length:', moreData?.logout_section?.length || 0);
+      
       // Call logout API
       const logoutUrl = moreData?.logout_section?.[0]?.route || `${API_BASE_URL}v1/auth/logout`;
       const isFullUrl = logoutUrl.startsWith('http');
-      const url = isFullUrl ? logoutUrl : `${API_BASE_URL}${logoutUrl.startsWith('/') ? logoutUrl.substring(1) : logoutUrl}`;
+      
+      // Construct final URL - handle routes that may already include /partner/api/
+      let url;
+      if (isFullUrl) {
+        url = logoutUrl;
+      } else {
+        // Remove leading slash if present
+        let route = logoutUrl.startsWith('/') ? logoutUrl.substring(1) : logoutUrl;
+        
+        // Check if route already includes /partner/api/ - if so, remove it to avoid duplication
+        if (route.startsWith('partner/api/')) {
+          route = route.substring('partner/api/'.length);
+          console.log('📋 [MoreScreen] Removed duplicate /partner/api/ prefix, route now:', route);
+        }
+        
+        // Construct final URL
+        url = `${API_BASE_URL}${route}`;
+      }
+      
       const method = moreData?.logout_section?.[0]?.method || 'POST';
       
-      console.log('📡 [MoreScreen] ========================================');
-      console.log('📡 [MoreScreen] LOGGING OUT');
-      console.log('📡 [MoreScreen] ========================================');
       console.log('📋 [MoreScreen] Logout Section Data:', JSON.stringify(moreData?.logout_section?.[0], null, 2));
       console.log('📋 [MoreScreen] Original Logout URL:', logoutUrl);
+      console.log('📋 [MoreScreen] URL Source:', moreData?.logout_section?.[0]?.route ? 'BACKEND' : 'FALLBACK');
       console.log('📋 [MoreScreen] Is Full URL:', isFullUrl);
+      console.log('📋 [MoreScreen] API Base URL:', API_BASE_URL);
       console.log('📋 [MoreScreen] Final URL:', url);
       console.log('📋 [MoreScreen] Method:', method);
+      console.log('📋 [MoreScreen] Method Source:', moreData?.logout_section?.[0]?.method ? 'BACKEND' : 'FALLBACK');
       
       try {
+        console.log('📡 [MoreScreen] Making logout API call...');
+        console.log('📡 [MoreScreen] Request URL:', url);
+        console.log('📡 [MoreScreen] Request Method:', method);
+        
         const response = await fetchWithAuth(url, {
           method: method,
         });
 
         const data = await response.json();
         console.log('📥 [MoreScreen] Logout Response Status:', response.status);
-        console.log('📥 [MoreScreen] Logout Response:', JSON.stringify(data, null, 2));
+        console.log('📥 [MoreScreen] Logout Response Headers:', JSON.stringify(response.headers || {}, null, 2));
+        console.log('📥 [MoreScreen] Logout Response Body:', JSON.stringify(data, null, 2));
 
         if (response.ok && (data.code === 200 || data.status === 'success')) {
           console.log('✅ [MoreScreen] Logout API call successful');
+          console.log('📋 [MoreScreen] Response Code:', data.code);
+          console.log('📋 [MoreScreen] Response Status:', data.status);
+          console.log('📋 [MoreScreen] Response Message:', data.message);
         } else {
           console.log('⚠️  [MoreScreen] Logout API returned non-success status, but continuing with logout');
+          console.log('📋 [MoreScreen] Response Code:', data.code);
+          console.log('📋 [MoreScreen] Response Status:', data.status);
+          console.log('📋 [MoreScreen] Response Message:', data.message);
         }
       } catch (apiError) {
         console.error('❌ [MoreScreen] Logout API error (continuing with logout):', apiError);
+        console.error('❌ [MoreScreen] Error Type:', apiError?.constructor?.name);
+        console.error('❌ [MoreScreen] Error Message:', apiError?.message);
+        console.error('❌ [MoreScreen] Error Stack:', apiError?.stack);
         // Continue with logout even if API call fails
       }
 
@@ -370,8 +436,15 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
       await clearTokens();
       console.log('✅ [MoreScreen] Tokens cleared');
       
+      // Get dynamic success message
+      const successMessage = getUILabel('logout_success_message', 'Logged out successfully');
+      console.log('📋 [MoreScreen] Using Success Message:', successMessage);
+      console.log('📋 [MoreScreen] Success Message Source:', 
+        configData?.logout_labels?.logout_success_message ? 'BACKEND' : 
+        configData?.ui_labels?.logout_success_message ? 'UI_LABELS' : 'FALLBACK');
+      
       // Show toast
-      showToast('Logged out successfully', 'success');
+      showToast(successMessage, 'success');
       
       // Call onLogout callback to navigate to OTP screen and clear all data
       if (onLogout) {
@@ -390,7 +463,10 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
         console.error('❌ [MoreScreen] Error clearing tokens:', clearError);
       }
       
-      showToast('Logged out successfully', 'success');
+      // Get dynamic success message
+      const successMessage = getUILabel('logout_success_message', 'Logged out successfully');
+      console.log('📋 [MoreScreen] Using Success Message (after error):', successMessage);
+      showToast(successMessage, 'success');
       
       // Call onLogout callback even if there's an error
       if (onLogout) {
@@ -399,7 +475,16 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
       }
     } finally {
       setIsLoggingOut(false);
-      console.log('📡 [MoreScreen] Logout process completed');
+      console.log('📡 [MoreScreen] ========================================');
+      console.log('📡 [MoreScreen] LOGOUT PROCESS COMPLETED');
+      console.log('📡 [MoreScreen] ========================================');
+      console.log('📋 [MoreScreen] Summary:');
+      console.log('  - API Call: Completed (may have succeeded or failed)');
+      console.log('  - Tokens: Cleared');
+      console.log('  - Navigation: onLogout callback called');
+      console.log('  - UI Labels: Dynamic from configData');
+      console.log('  - Logout URL: ' + (moreData?.logout_section?.[0]?.route ? 'BACKEND' : 'FALLBACK'));
+      console.log('  - Logout Method: ' + (moreData?.logout_section?.[0]?.method ? 'BACKEND' : 'FALLBACK'));
       console.log('📡 [MoreScreen] ========================================');
     }
   };

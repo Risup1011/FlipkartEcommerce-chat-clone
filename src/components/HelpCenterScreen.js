@@ -24,15 +24,86 @@ const HelpCenterScreen = ({ onBack, screenTitle = 'Help Center', route }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Fetch FAQs from backend API if available
-    // For now, using placeholder data
-    setFaqs([
-      { id: '1', question: 'What is Kamai24?', answer: 'Kamai24 is a platform for restaurant partners to manage their orders and business.' },
-      { id: '2', question: 'How to manage orders?', answer: 'You can view and manage orders from the Orders tab in the bottom navigation.' },
-      { id: '3', question: 'How to update menu items?', answer: 'Go to Menu tab and you can add, edit, or remove menu items from there.' },
-    ]);
-    setIsLoading(false);
-  }, []);
+    fetchHelpData();
+  }, [route]);
+
+  const fetchHelpData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Build API endpoint from route prop
+      // route could be "/help-center" or "/partner-faqs"
+      let endpoint = route;
+      if (!endpoint) {
+        // Default to help-center if no route provided
+        endpoint = '/help-center';
+      }
+      
+      // Remove leading slash if present
+      if (endpoint.startsWith('/')) {
+        endpoint = endpoint.substring(1);
+      }
+      
+      // Build full API URL
+      const url = `${API_BASE_URL}v1${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+      
+      console.log('📡 [HelpCenterScreen] ========================================');
+      console.log('📡 [HelpCenterScreen] FETCHING HELP DATA');
+      console.log('📡 [HelpCenterScreen] ========================================');
+      console.log('📡 [HelpCenterScreen] Route:', route);
+      console.log('📡 [HelpCenterScreen] Endpoint:', endpoint);
+      console.log('📡 [HelpCenterScreen] URL:', url);
+      
+      const response = await fetchWithAuth(url, {
+        method: 'GET',
+      });
+
+      const data = await response.json();
+      console.log('📥 [HelpCenterScreen] Help API Response Status:', response.status);
+      console.log('📥 [HelpCenterScreen] Help API Response:', JSON.stringify(data, null, 2));
+
+      if (response.ok && data.code === 200 && data.status === 'success') {
+        console.log('✅ [HelpCenterScreen] Help data loaded successfully');
+        
+        // Handle different response structures
+        if (data.data?.faqs && Array.isArray(data.data.faqs)) {
+          // If backend provides FAQs array
+          setFaqs(data.data.faqs);
+        } else if (data.data?.items && Array.isArray(data.data.items)) {
+          // If backend provides items array
+          setFaqs(data.data.items);
+        } else if (Array.isArray(data.data)) {
+          // If data is directly an array
+          setFaqs(data.data);
+        } else if (data.data) {
+          // If data is an object, try to extract FAQs
+          console.warn('⚠️ [HelpCenterScreen] Unexpected data structure, using fallback');
+          setFaqs([]);
+        } else {
+          setFaqs([]);
+        }
+      } else {
+        console.error('❌ [HelpCenterScreen] Failed to fetch help data:', data.message);
+        // Use placeholder data as fallback
+        setFaqs([
+          { id: '1', question: 'What is Kamai24?', answer: 'Kamai24 is a platform for restaurant partners to manage their orders and business.' },
+          { id: '2', question: 'How to manage orders?', answer: 'You can view and manage orders from the Orders tab in the bottom navigation.' },
+          { id: '3', question: 'How to update menu items?', answer: 'Go to Menu tab and you can add, edit, or remove menu items from there.' },
+        ]);
+      }
+    } catch (error) {
+      console.error('❌ [HelpCenterScreen] Error fetching help data:', error);
+      // Use placeholder data as fallback
+      setFaqs([
+        { id: '1', question: 'What is Kamai24?', answer: 'Kamai24 is a platform for restaurant partners to manage their orders and business.' },
+        { id: '2', question: 'How to manage orders?', answer: 'You can view and manage orders from the Orders tab in the bottom navigation.' },
+        { id: '3', question: 'How to update menu items?', answer: 'Go to Menu tab and you can add, edit, or remove menu items from there.' },
+      ]);
+    } finally {
+      setIsLoading(false);
+      console.log('📡 [HelpCenterScreen] Help data loading completed');
+    }
+  };
 
   const toggleFaq = (faqId) => {
     setExpandedFaqs((prev) => ({
@@ -253,4 +324,3 @@ const styles = StyleSheet.create({
 });
 
 export default HelpCenterScreen;
-

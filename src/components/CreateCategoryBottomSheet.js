@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,24 @@ import { Poppins } from '../assets';
 import CustomButton from './CustomButton';
 import CustomBottomSheet from './CustomBottomSheet';
 
-const CreateCategoryBottomSheet = ({ visible, onClose, onSave }) => {
+const CreateCategoryBottomSheet = ({ visible, onClose, onSave, categoryData = null }) => {
   const [categoryName, setCategoryName] = useState('');
   const [description, setDescription] = useState('');
   const [displayOrder, setDisplayOrder] = useState('');
+
+  // Populate fields when editing
+  useEffect(() => {
+    if (categoryData) {
+      setCategoryName(categoryData.name || '');
+      setDescription(categoryData.description || '');
+      setDisplayOrder(categoryData.display_order?.toString() || '');
+    } else {
+      // Reset when creating new
+      setCategoryName('');
+      setDescription('');
+      setDisplayOrder('');
+    }
+  }, [categoryData, visible]);
 
   const handleSave = () => {
     if (categoryName.trim()) {
@@ -51,7 +65,7 @@ const CreateCategoryBottomSheet = ({ visible, onClose, onSave }) => {
         nestedScrollEnabled={true}
       >
         {/* Title */}
-        <Text style={styles.title}>Create Category</Text>
+        <Text style={styles.title}>{categoryData ? 'Edit Category' : 'Create Category'}</Text>
         
         {/* Divider */}
         <View style={styles.divider} />

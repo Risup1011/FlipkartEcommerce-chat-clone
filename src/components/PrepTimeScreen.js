@@ -16,11 +16,18 @@ import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
-const PrepTimeScreen = ({ onBack }) => {
+const PrepTimeScreen = ({ onBack, configData }) => {
   const { showToast } = useToast();
   const [prepTime, setPrepTime] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Get UI labels from config with fallbacks
+  const getUILabel = (key, fallback) => {
+    return configData?.prep_time_labels?.[key] || 
+           configData?.ui_labels?.[key] || 
+           fallback;
+  };
 
   useEffect(() => {
     fetchPrepTime();
@@ -40,15 +47,24 @@ const PrepTimeScreen = ({ onBack }) => {
       console.log('📥 [PrepTimeScreen] Settings Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        const defaultPrepTime = data.data?.default_prep_time_minutes || 30;
-        setPrepTime(defaultPrepTime.toString());
+        // Get prep time from backend - fully dynamic, no hardcoded default
+        const defaultPrepTime = data.data?.default_prep_time_minutes;
+        if (defaultPrepTime !== undefined && defaultPrepTime !== null) {
+          console.log('✅ [PrepTimeScreen] Prep time loaded from backend:', defaultPrepTime);
+          setPrepTime(defaultPrepTime.toString());
+        } else {
+          console.log('⚠️ [PrepTimeScreen] No prep time in backend response, using empty');
+          setPrepTime('');
+        }
       } else {
         console.error('❌ [PrepTimeScreen] Failed to fetch settings:', data.message);
-        showToast(data.message || 'Failed to load prep time', 'error');
+        const errorMessage = getUILabel('load_prep_time_error', 'Failed to load prep time');
+        showToast(data.message || errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [PrepTimeScreen] Error fetching settings:', error);
-      showToast('Failed to load prep time', 'error');
+      const errorMessage = getUILabel('load_prep_time_error', 'Failed to load prep time');
+      showToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -60,7 +76,8 @@ const PrepTimeScreen = ({ onBack }) => {
       const prepTimeMinutes = parseInt(prepTime, 10);
 
       if (isNaN(prepTimeMinutes) || prepTimeMinutes < 0) {
-        showToast('Please enter a valid prep time', 'error');
+        const errorMessage = getUILabel('invalid_prep_time_error', 'Please enter a valid prep time');
+        showToast(errorMessage, 'error');
         return;
       }
 
@@ -79,16 +96,19 @@ const PrepTimeScreen = ({ onBack }) => {
       console.log('📥 [PrepTimeScreen] Update Prep Time Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        showToast('Prep time updated successfully', 'success');
+        const successMessage = getUILabel('prep_time_updated_success', 'Prep time updated successfully');
+        showToast(successMessage, 'success');
         if (onBack) {
           onBack();
         }
       } else {
-        showToast(data.message || 'Failed to update prep time', 'error');
+        const errorMessage = data.message || getUILabel('update_prep_time_error', 'Failed to update prep time');
+        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [PrepTimeScreen] Error updating prep time:', error);
-      showToast('Failed to update prep time', 'error');
+      const errorMessage = getUILabel('update_prep_time_error', 'Failed to update prep time');
+      showToast(errorMessage, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -98,7 +118,7 @@ const PrepTimeScreen = ({ onBack }) => {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <CustomHeader
-          title="Prep Time"
+          title={getUILabel('prep_time_title', 'Prep Time')}
           onBack={onBack}
           showBackButton={true}
         />
@@ -112,7 +132,7 @@ const PrepTimeScreen = ({ onBack }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <CustomHeader
-        title="Prep Time"
+        title={getUILabel('prep_time_title', 'Prep Time')}
         onBack={onBack}
         showBackButton={true}
       />
@@ -123,21 +143,23 @@ const PrepTimeScreen = ({ onBack }) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.formContainer}>
-          <Text style={styles.label}>Default Prep Time (minutes)</Text>
+          <Text style={styles.label}>
+            {getUILabel('prep_time_label', 'Default Prep Time (minutes)')}
+          </Text>
           <CustomTextInput
             value={prepTime}
             onChangeText={setPrepTime}
-            placeholder="Enter prep time in minutes"
+            placeholder={getUILabel('prep_time_placeholder', 'Enter prep time in minutes')}
             keyboardType="numeric"
           />
           <Text style={styles.hint}>
-            This is the default preparation time for all orders. You can override this for individual items.
+            {getUILabel('prep_time_hint', 'This is the default preparation time for all orders. You can override this for individual items.')}
           </Text>
         </View>
 
         <View style={styles.buttonContainer}>
           <CustomButton
-            title="Save"
+            title={getUILabel('save_button', 'Save')}
             onPress={handleSave}
             disabled={isSaving}
             loading={isSaving}
@@ -190,4 +212,3 @@ const styles = StyleSheet.create({
 });
 
 export default PrepTimeScreen;
-

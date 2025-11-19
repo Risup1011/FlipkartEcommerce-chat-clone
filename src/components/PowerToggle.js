@@ -37,7 +37,7 @@ export default function PowerToggle({ value = false, onValueChange, disabled = f
             source={icons.powerOnOff} 
             style={styles.icon}
             resizeMode="contain"
-            tintColor={value ? '#4CAF50' : '#f44336'}
+            tintColor={value ? '#29b32e' : '#EF5350'}
           />
         </Animated.View>
       </View>
@@ -58,10 +58,10 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   trackOff: {
-    backgroundColor: '#f44336',   // red for off state
+    backgroundColor: '#f57f7d',   // red for off state
   },
   trackOn: {
-    backgroundColor: '#4CAF50',   // green for on state
+    backgroundColor: '#81C784',   // light green for on state
   },
   circle: {
     width: 40,

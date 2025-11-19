@@ -14,6 +14,8 @@ import { Poppins } from '../assets';
 import CustomHeader from './CustomHeader';
 import CustomDropdown from './CustomDropdown';
 import CustomButton from './CustomButton';
+import { fetchWithAuth } from '../utils/apiHelpers';
+import { API_BASE_URL } from '../config';
 
 const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCategories = [] }) => {
   const [itemName, setItemName] = useState(itemData?.name || '');
@@ -25,19 +27,125 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCat
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState(itemData?.sub_category_id || null);
   const [displayOrder, setDisplayOrder] = useState(itemData?.display_order?.toString() || '');
   const [finalPrice, setFinalPrice] = useState(0);
+  const [gstOptions, setGstOptions] = useState(['0%', '5%', '10%', '12%', '18%']); // Default fallback options
+  const [isLoadingGstOptions, setIsLoadingGstOptions] = useState(false);
 
-  const gstOptions = ['0%', '5%', '10%', '12%', '18%'];
   const itemTypeOptions = ['VEG', 'NON_VEG'];
   
-  // Convert GST percentage to API format
+  // Fetch GST options from backend
+  useEffect(() => {
+    const fetchGstOptions = async () => {
+      setIsLoadingGstOptions(true);
+      try {
+        // Try fetching from config endpoint first
+        const url = `${API_BASE_URL}v1/config`;
+        console.log('📡 [ItemDetailsScreen] Fetching GST options from:', url);
+        
+        const response = await fetchWithAuth(url, {
+          method: 'GET',
+        });
+        
+        const responseData = await response.json();
+        
+        if (response.ok && responseData?.data) {
+          // Check if GST options are in the config response
+          // The structure might vary, so we'll check common patterns
+          const gstRates = responseData.data.gst_rates || 
+                          responseData.data.gst_options || 
+                          responseData.data.tax_rates ||
+                          responseData.data.gst;
+          
+          if (gstRates && Array.isArray(gstRates) && gstRates.length > 0) {
+            // Convert backend format to display format (e.g., ['0%', '5%', '10%'])
+            const formattedOptions = gstRates.map(rate => {
+              if (typeof rate === 'string') {
+                // If it's already in format like "0%", use it directly
+                if (rate.includes('%')) {
+                  return rate;
+                }
+                // If it's in format like "GST_0", convert to "0%"
+                if (rate.startsWith('GST_')) {
+                  return rate.replace('GST_', '') + '%';
+                }
+                // If it's just a number, add %
+                return rate + '%';
+              } else if (typeof rate === 'number') {
+                return rate + '%';
+              } else if (rate && typeof rate === 'object') {
+                // If it's an object with value/label, extract the percentage
+                const value = rate.value || rate.rate || rate.percentage || rate;
+                if (typeof value === 'string' && value.includes('%')) {
+                  return value;
+                }
+                if (typeof value === 'string' && value.startsWith('GST_')) {
+                  return value.replace('GST_', '') + '%';
+                }
+                return (typeof value === 'number' ? value : parseFloat(value) || 0) + '%';
+              }
+              return rate;
+            });
+            
+            setGstOptions(formattedOptions);
+            console.log('✅ [ItemDetailsScreen] GST options loaded from backend:', formattedOptions);
+            
+            // Validate current GST value is in the new options
+            setGst(prevGst => {
+              if (!formattedOptions.includes(prevGst)) {
+                console.log(`⚠️ [ItemDetailsScreen] Current GST value "${prevGst}" not in backend options, resetting to first option`);
+                return formattedOptions[0] || '0%';
+              }
+              return prevGst;
+            });
+          } else {
+            // If no GST options found in config, try a dedicated GST endpoint
+            console.log('⚠️ [ItemDetailsScreen] No GST options in config, trying dedicated endpoint...');
+            const gstUrl = `${API_BASE_URL}v1/gst-rates`;
+            const gstResponse = await fetchWithAuth(gstUrl, {
+              method: 'GET',
+            });
+            
+            const gstData = await gstResponse.json();
+            if (gstResponse.ok && gstData?.data && Array.isArray(gstData.data)) {
+              const formattedOptions = gstData.data.map(rate => {
+                if (typeof rate === 'string') {
+                  return rate.includes('%') ? rate : rate + '%';
+                }
+                return (typeof rate === 'number' ? rate : parseFloat(rate) || 0) + '%';
+              });
+              setGstOptions(formattedOptions);
+              console.log('✅ [ItemDetailsScreen] GST options loaded from dedicated endpoint:', formattedOptions);
+              
+              // Validate current GST value is in the new options
+              setGst(prevGst => {
+                if (!formattedOptions.includes(prevGst)) {
+                  console.log(`⚠️ [ItemDetailsScreen] Current GST value "${prevGst}" not in backend options, resetting to first option`);
+                  return formattedOptions[0] || '0%';
+                }
+                return prevGst;
+              });
+            } else {
+              console.log('⚠️ [ItemDetailsScreen] No GST endpoint found, using default options');
+            }
+          }
+        } else {
+          console.log('⚠️ [ItemDetailsScreen] Config fetch failed, using default GST options');
+        }
+      } catch (error) {
+        console.error('❌ [ItemDetailsScreen] Error fetching GST options:', error);
+        // Keep default options on error
+      } finally {
+        setIsLoadingGstOptions(false);
+      }
+    };
+
+    fetchGstOptions();
+  }, []);
+  
+  // Convert GST percentage to API format (dynamic based on available options)
   const getGstRate = (gstPercent) => {
     const percent = parseFloat(gstPercent.replace('%', '')) || 0;
-    if (percent === 0) return 'GST_0';
-    if (percent === 5) return 'GST_5';
-    if (percent === 10) return 'GST_10';
-    if (percent === 12) return 'GST_12';
-    if (percent === 18) return 'GST_18';
-    return 'GST_0';
+    // Generate GST rate code dynamically (e.g., GST_0, GST_5, GST_10)
+    return `GST_${percent}`;
   };
 
   // Calculate final price whenever inputs change
@@ -210,6 +318,7 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCat
               Item Pricing<Text style={styles.asterisk}> *</Text>
             </Text>
 
+            {/* First Row: Item Price and Packaging Price */}
             <View style={styles.pricingRow}>
               {/* Item Price */}
               <View style={[styles.fieldContainer, styles.pricingField]}>
@@ -242,18 +351,18 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCat
                 />
                 <Text style={styles.helperText}>Excluding all taxes</Text>
               </View>
+            </View>
 
-              {/* GST */}
-              <View style={[styles.fieldContainer, styles.pricingField]}>
-                <Text style={styles.label}>GST</Text>
-                <View style={styles.dropdownWrapper}>
-                  <CustomDropdown
-                    value={gst}
-                    onSelect={(value) => setGst(value)}
-                    placeholder="Select GST"
-                    options={gstOptions}
-                  />
-                </View>
+            {/* Second Row: GST */}
+            <View style={styles.fieldContainer}>
+              <Text style={styles.label}>GST</Text>
+              <View style={styles.dropdownWrapper}>
+                <CustomDropdown
+                  value={gst}
+                  onSelect={(value) => setGst(value)}
+                  placeholder="Select GST"
+                  options={gstOptions}
+                />
               </View>
             </View>
           </View>

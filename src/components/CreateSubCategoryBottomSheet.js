@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,24 @@ import { Poppins } from '../assets';
 import CustomButton from './CustomButton';
 import CustomBottomSheet from './CustomBottomSheet';
 
-const CreateSubCategoryBottomSheet = ({ visible, onClose, onSave, categoryName = '' }) => {
+const CreateSubCategoryBottomSheet = ({ visible, onClose, onSave, categoryName = '', subCategoryData = null }) => {
   const [subCategoryName, setSubCategoryName] = useState('');
   const [description, setDescription] = useState('');
   const [displayOrder, setDisplayOrder] = useState('');
+
+  // Populate fields when editing
+  useEffect(() => {
+    if (subCategoryData) {
+      setSubCategoryName(subCategoryData.name || '');
+      setDescription(subCategoryData.description || '');
+      setDisplayOrder(subCategoryData.display_order?.toString() || '');
+    } else {
+      // Reset when creating new
+      setSubCategoryName('');
+      setDescription('');
+      setDisplayOrder('');
+    }
+  }, [subCategoryData, visible]);
 
   const handleSave = () => {
     if (subCategoryName.trim()) {
@@ -50,7 +64,7 @@ const CreateSubCategoryBottomSheet = ({ visible, onClose, onSave, categoryName =
         keyboardShouldPersistTaps="handled"
       >
         {/* Title */}
-        <Text style={styles.title}>Create Sub-Category</Text>
+        <Text style={styles.title}>{subCategoryData ? 'Edit Sub-Category' : 'Create Sub-Category'}</Text>
         
         {/* Divider */}
         <View style={styles.divider} />

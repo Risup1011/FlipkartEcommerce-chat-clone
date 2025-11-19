@@ -24,6 +24,7 @@ export default function App() {
   const [countryFlag, setCountryFlag] = useState('🇮🇳')
   const [configData, setConfigData] = useState(null) // Store config data for passing to screens
   const [ordersInitialTab, setOrdersInitialTab] = useState(null) // Store initial tab for OrdersScreen
+  const [ordersInitialBottomTab, setOrdersInitialBottomTab] = useState(null) // Store initial bottom tab for OrdersScreen
 
   useEffect(() => {
     // Check session and onboarding status on app start
@@ -572,20 +573,39 @@ export default function App() {
    * Handle navigation from MoreScreen
    */
   const handleNavigateFromMore = (screen) => {
-    console.log('📡 [App] Navigating from MoreScreen to:', screen);
+    console.log('📡 [App] ========================================');
+    console.log('📡 [App] NAVIGATING FROM MORESCREEN');
+    console.log('📡 [App] ========================================');
+    console.log('📡 [App] Target Screen:', screen);
     
     if (screen === 'pastOrders') {
       // Navigate to OrdersScreen with Past Orders tab active
+      console.log('📍 [App] Navigating to OrdersScreen with Past Orders tab');
       setOrdersInitialTab('pastOrders');
       setCurrentScreen('orders');
-      // Reset initialTab after navigation so it doesn't persist
+      console.log('✅ [App] Navigation set - Screen: orders, Initial Tab: pastOrders');
+      // Reset initialTab after navigation so it doesn't persist on next visit
       setTimeout(() => {
+        console.log('🔄 [App] Resetting ordersInitialTab');
         setOrdersInitialTab(null);
-      }, 500);
+      }, 1000); // Increased timeout to ensure tab is set
+    } else if (screen === 'more') {
+      // Navigate to OrdersScreen with More tab active
+      console.log('📍 [App] Navigating to OrdersScreen with More tab');
+      setOrdersInitialBottomTab('more');
+      setCurrentScreen('orders');
+      console.log('✅ [App] Navigation set - Screen: orders, Initial Bottom Tab: more');
+      // Reset initialBottomTab after navigation
+      setTimeout(() => {
+        console.log('🔄 [App] Resetting ordersInitialBottomTab');
+        setOrdersInitialBottomTab(null);
+      }, 1000);
     } else {
       // Navigate to other screens
+      console.log('📍 [App] Navigating to screen:', screen);
       setCurrentScreen(screen);
     }
+    console.log('📡 [App] ========================================');
   };
 
   /**
@@ -733,16 +753,19 @@ export default function App() {
           partnerStatus={partnerStatus}
           onLogout={handleLogout}
           initialTab={ordersInitialTab}
+          initialBottomTab={ordersInitialBottomTab}
           onNavigate={handleNavigateFromMore}
         />
       ) : currentScreen === 'outletTimings' ? (
         <OutletTimingsScreen
+          onNavigate={handleNavigateFromMore}
           onBack={() => setCurrentScreen('orders')}
           configData={configData}
         />
       ) : currentScreen === 'prepTime' ? (
         <PrepTimeScreen
           onBack={() => setCurrentScreen('orders')}
+          configData={configData}
         />
       ) : currentScreen === 'accountSettings' ? (
         <AccountSettingsScreen
