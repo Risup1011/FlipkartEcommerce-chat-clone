@@ -21,7 +21,7 @@ export default function PowerToggle({ value = false, onValueChange, disabled = f
 
   const circleTranslate = anim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 30], // circle movement
+    outputRange: [0, 34], // circle movement (70 - 40 + 4)
   });
 
   return (
@@ -29,6 +29,7 @@ export default function PowerToggle({ value = false, onValueChange, disabled = f
       activeOpacity={0.9} 
       onPress={toggle}
       disabled={disabled}
+      style={styles.container}
     >
       <View style={[styles.track, value ? styles.trackOn : styles.trackOff]}>
         <Animated.View style={[styles.circle, { transform: [{ translateX: circleTranslate }] }]}>
@@ -36,6 +37,7 @@ export default function PowerToggle({ value = false, onValueChange, disabled = f
             source={icons.powerOnOff} 
             style={styles.icon}
             resizeMode="contain"
+            tintColor={value ? '#4CAF50' : '#f44336'}
           />
         </Animated.View>
       </View>
@@ -44,12 +46,16 @@ export default function PowerToggle({ value = false, onValueChange, disabled = f
 }
 
 const styles = StyleSheet.create({
+  container: {
+    overflow: 'visible',
+  },
   track: {
     width: 70,
-    height: 32,
+    height: 36,
     borderRadius: 20,
-    padding: 2,
+    padding: 0,
     justifyContent: 'center',
+    overflow: 'visible',
   },
   trackOff: {
     backgroundColor: '#f44336',   // red for off state
@@ -58,15 +64,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',   // green for on state
   },
   circle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',  // white circle
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'absolute',
+    left: -4,
   },
   icon: {
-    width: 18,
-    height: 18,
+    width: 32,
+    height: 32,
   },
 });

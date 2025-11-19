@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { StatusBar } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { SplashScreen, OTPVerificationScreen, VerificationCodeScreen, RestaurantDetailsScreen, DynamicFormScreen, FSSAIDetailsScreen, OwnerAndLocationDetailsScreen, GSTINPANDetailsScreen, BankDetailsScreen, MoUESignDetailsScreen, PackagingDetailsScreen, OrdersScreen, ApplicationUnderReviewScreen, ToastProvider, SuccessBottomSheet } from './src/components'
+import { SplashScreen, OTPVerificationScreen, VerificationCodeScreen, RestaurantDetailsScreen, DynamicFormScreen, FSSAIDetailsScreen, OwnerAndLocationDetailsScreen, GSTINPANDetailsScreen, BankDetailsScreen, MoUESignDetailsScreen, PackagingDetailsScreen, OrdersScreen, ApplicationUnderReviewScreen, ToastProvider, SuccessBottomSheet, OutletTimingsScreen, HelpCenterScreen, PrepTimeScreen, AccountSettingsScreen, ComplianceScreen } from './src/components'
 import { CountryPicker } from 'react-native-country-codes-picker'
 import { API_BASE_URL } from './src/config'
 import { getAccessToken, isAuthenticated, clearTokens } from './src/utils/tokenStorage'
@@ -12,7 +12,7 @@ const PHONE_STORAGE_KEY = '@Kamai24:phoneNumber'
 
 export default function App() {
   const [isSplashVisible, setIsSplashVisible] = useState(true)
-  const [currentScreen, setCurrentScreen] = useState('otp') // 'otp', 'verification', 'restaurant', 'businessProof', 'ownerIdProof', 'addressProof', 'bankProof', 'fssai', 'ownerLocation', 'gstinPan', 'bank', 'mouESign', 'packaging', 'orders', 'underReview'
+  const [currentScreen, setCurrentScreen] = useState('otp') // 'otp', 'verification', 'restaurant', 'businessProof', 'ownerIdProof', 'addressProof', 'bankProof', 'fssai', 'ownerLocation', 'gstinPan', 'bank', 'mouESign', 'packaging', 'orders', 'underReview', 'outletTimings', 'prepTime', 'accountSettings', 'pastOrders', 'partnerFaqs', 'compliance', 'helpCenter'
   const [phoneNumber, setPhoneNumber] = useState('')
   const [otpData, setOtpData] = useState(null) // Store OTP response data (otp_id, expires_in)
   const [partnerStatus, setPartnerStatus] = useState(null) // Store partner_status: 'NOT_STARTED', 'UNDER_REVIEW', 'APPROVED'
@@ -22,6 +22,8 @@ export default function App() {
   const [onboardingId, setOnboardingId] = useState('8925461') // Default onboarding ID
   const [countryCode, setCountryCode] = useState('+91')
   const [countryFlag, setCountryFlag] = useState('🇮🇳')
+  const [configData, setConfigData] = useState(null) // Store config data for passing to screens
+  const [ordersInitialTab, setOrdersInitialTab] = useState(null) // Store initial tab for OrdersScreen
 
   useEffect(() => {
     // Check session and onboarding status on app start
@@ -566,6 +568,111 @@ export default function App() {
     setCurrentScreen('packaging')
   }
 
+  /**
+   * Handle navigation from MoreScreen
+   */
+  const handleNavigateFromMore = (screen) => {
+    console.log('📡 [App] Navigating from MoreScreen to:', screen);
+    
+    if (screen === 'pastOrders') {
+      // Navigate to OrdersScreen with Past Orders tab active
+      setOrdersInitialTab('pastOrders');
+      setCurrentScreen('orders');
+      // Reset initialTab after navigation so it doesn't persist
+      setTimeout(() => {
+        setOrdersInitialTab(null);
+      }, 500);
+    } else {
+      // Navigate to other screens
+      setCurrentScreen(screen);
+    }
+  };
+
+  /**
+   * Fetch config data for passing to screens
+   */
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const url = `${API_BASE_URL}v1/config`;
+        const response = await fetchWithAuth(url, {
+          method: 'GET',
+        }, true);
+
+        const data = await response.json();
+        if (response.ok && data.code === 200 && data.status === 'success') {
+          setConfigData(data.data);
+        }
+      } catch (error) {
+        console.error('❌ [App] Error fetching config:', error);
+      }
+    };
+
+    if (partnerStatus === 'APPROVED') {
+      fetchConfig();
+    }
+  }, [partnerStatus]);
+
+  /**
+   * Handle logout - clear all data and navigate to OTP screen
+   */
+  const handleLogout = async () => {
+    try {
+      console.log('📡 [App] ========================================');
+      console.log('📡 [App] LOGOUT INITIATED');
+      console.log('📡 [App] ========================================');
+      
+      // Clear all tokens
+      console.log('🗑️  [App] Clearing tokens...');
+      await clearTokens();
+      console.log('✅ [App] Tokens cleared');
+      
+      // Clear OTP data
+      console.log('🗑️  [App] Clearing OTP data...');
+      try {
+        await AsyncStorage.removeItem(OTP_STORAGE_KEY);
+        await AsyncStorage.removeItem(PHONE_STORAGE_KEY);
+        console.log('✅ [App] OTP data cleared');
+      } catch (error) {
+        console.error('❌ [App] Error clearing OTP data:', error);
+      }
+      
+      // Clear all AsyncStorage data (comprehensive cleanup)
+      console.log('🗑️  [App] Performing comprehensive AsyncStorage cleanup...');
+      try {
+        const allKeys = await AsyncStorage.getAllKeys();
+        const kamai24Keys = allKeys.filter(key => key.startsWith('@Kamai24:'));
+        if (kamai24Keys.length > 0) {
+          await AsyncStorage.multiRemove(kamai24Keys);
+          console.log('✅ [App] All Kamai24 data cleared:', kamai24Keys);
+        }
+      } catch (error) {
+        console.error('❌ [App] Error clearing AsyncStorage:', error);
+      }
+      
+      // Reset app state
+      console.log('🔄 [App] Resetting app state...');
+      setPhoneNumber('');
+      setOtpData(null);
+      setPartnerStatus(null);
+      setPartnerId(null);
+      setOnboardingId('8925461');
+      setCountryCode('+91');
+      setCountryFlag('🇮🇳');
+      
+      // Navigate to OTP screen
+      console.log('📍 [App] Navigating to OTP screen...');
+      setCurrentScreen('otp');
+      
+      console.log('✅ [App] Logout completed successfully');
+      console.log('📡 [App] ========================================');
+    } catch (error) {
+      console.error('❌ [App] Error during logout:', error);
+      // Even if there's an error, navigate to OTP screen
+      setCurrentScreen('otp');
+    }
+  }
+
   return (
     <ToastProvider>
       <StatusBar
@@ -624,6 +731,38 @@ export default function App() {
       ) : currentScreen === 'orders' ? (
         <OrdersScreen
           partnerStatus={partnerStatus}
+          onLogout={handleLogout}
+          initialTab={ordersInitialTab}
+          onNavigate={handleNavigateFromMore}
+        />
+      ) : currentScreen === 'outletTimings' ? (
+        <OutletTimingsScreen
+          onBack={() => setCurrentScreen('orders')}
+          configData={configData}
+        />
+      ) : currentScreen === 'prepTime' ? (
+        <PrepTimeScreen
+          onBack={() => setCurrentScreen('orders')}
+        />
+      ) : currentScreen === 'accountSettings' ? (
+        <AccountSettingsScreen
+          onBack={() => setCurrentScreen('orders')}
+        />
+      ) : currentScreen === 'partnerFaqs' ? (
+        <HelpCenterScreen
+          onBack={() => setCurrentScreen('orders')}
+          screenTitle="Partner FAQs"
+          route="/partner-faqs"
+        />
+      ) : currentScreen === 'compliance' ? (
+        <ComplianceScreen
+          onBack={() => setCurrentScreen('orders')}
+        />
+      ) : currentScreen === 'helpCenter' ? (
+        <HelpCenterScreen
+          onBack={() => setCurrentScreen('orders')}
+          screenTitle="Help Center"
+          route="/help-center"
         />
       ) : (
         // FSSAI and other old screens commented off - no navigation to these screens

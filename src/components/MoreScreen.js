@@ -8,25 +8,34 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { Poppins, icons } from '../assets';
+import { Poppins, icons, images } from '../assets';
 import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 import { clearTokens } from '../utils/tokenStorage';
 import PowerToggle from './PowerToggle';
 
-const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
+const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configData: configDataProp }) => {
   const { showToast } = useToast();
   const [moreData, setMoreData] = useState(null);
   const [isLoadingMoreData, setIsLoadingMoreData] = useState(true);
   const [isTogglingOrders, setIsTogglingOrders] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [configData, setConfigData] = useState(null);
-  const [isLoadingConfigData, setIsLoadingConfigData] = useState(true);
+  const [configData, setConfigData] = useState(configDataProp || null);
+  const [isLoadingConfigData, setIsLoadingConfigData] = useState(!configDataProp);
 
-  // Fetch config data for restaurant info (for header)
+  // Fetch config data for restaurant info (for header) - only if not provided as prop
   useEffect(() => {
+    // If configData is provided as prop, use it and skip fetching
+    if (configDataProp) {
+      setConfigData(configDataProp);
+      setIsLoadingConfigData(false);
+      return;
+    }
+
+    // Otherwise, fetch it
     const fetchConfigData = async () => {
       try {
         setIsLoadingConfigData(true);
@@ -60,7 +69,7 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
     };
 
     fetchConfigData();
-  }, []);
+  }, [configDataProp]);
 
   // Fetch more screen data from backend
   useEffect(() => {
@@ -249,45 +258,43 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
       console.log('🔄 [MoreScreen] Extracted Route:', route);
       
       // Map routes to navigation actions
-      switch (route) {
-        case 'outlet-timings':
-          console.log('📍 [MoreScreen] Navigating to: Outlet Timings');
-          showToast('Outlet timings - Coming soon', 'info');
-          // TODO: Navigate to outlet timings screen
-          break;
-        case 'prep-time':
-          console.log('📍 [MoreScreen] Navigating to: Prep Time');
-          showToast('Prep time - Coming soon', 'info');
-          // TODO: Navigate to prep time screen
-          break;
-        case 'account-settings':
-          console.log('📍 [MoreScreen] Navigating to: Account Settings');
-          showToast('Account settings - Coming soon', 'info');
-          // TODO: Navigate to account settings screen
-          break;
-        case 'past-orders':
-          console.log('📍 [MoreScreen] Navigating to: Past Orders');
-          showToast('Past orders - Coming soon', 'info');
-          // TODO: Navigate to past orders screen
-          break;
-        case 'partner-faqs':
-          console.log('📍 [MoreScreen] Navigating to: Partner FAQs');
-          showToast('Partner FAQs - Coming soon', 'info');
-          // TODO: Navigate to partner FAQs screen
-          break;
-        case 'compliance':
-          console.log('📍 [MoreScreen] Navigating to: Compliance');
-          showToast('Compliance - Coming soon', 'info');
-          // TODO: Navigate to compliance screen
-          break;
-        case 'help-center':
-          console.log('📍 [MoreScreen] Navigating to: Help Center');
-          showToast('Help center - Coming soon', 'info');
-          // TODO: Navigate to help center screen
-          break;
-        default:
-          console.log('📍 [MoreScreen] Unknown route, showing toast:', route);
-          showToast(`${menuItem.title} - Coming soon`, 'info');
+      if (onNavigate) {
+        switch (route) {
+          case 'outlet-timings':
+            console.log('📍 [MoreScreen] Navigating to: Outlet Timings');
+            onNavigate('outletTimings');
+            break;
+          case 'prep-time':
+            console.log('📍 [MoreScreen] Navigating to: Prep Time');
+            onNavigate('prepTime');
+            break;
+          case 'account-settings':
+            console.log('📍 [MoreScreen] Navigating to: Account Settings');
+            onNavigate('accountSettings');
+            break;
+          case 'past-orders':
+            console.log('📍 [MoreScreen] Navigating to: Past Orders');
+            onNavigate('pastOrders');
+            break;
+          case 'partner-faqs':
+            console.log('📍 [MoreScreen] Navigating to: Partner FAQs');
+            onNavigate('partnerFaqs');
+            break;
+          case 'compliance':
+            console.log('📍 [MoreScreen] Navigating to: Compliance');
+            onNavigate('compliance');
+            break;
+          case 'help-center':
+            console.log('📍 [MoreScreen] Navigating to: Help Center');
+            onNavigate('helpCenter');
+            break;
+          default:
+            console.log('📍 [MoreScreen] Unknown route, showing toast:', route);
+            showToast(`${menuItem.title} - Coming soon`, 'info');
+        }
+      } else {
+        console.warn('⚠️  [MoreScreen] onNavigate callback not provided');
+        showToast(`${menuItem.title} - Coming soon`, 'info');
       }
     } else {
       console.log('⚠️  [MoreScreen] No route specified for menu item');
@@ -295,7 +302,32 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
+    // Show confirmation popup before logging out
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => {
+            console.log('📡 [MoreScreen] Logout cancelled by user');
+          },
+        },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            await performLogout();
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const performLogout = async () => {
     try {
       setIsLoggingOut(true);
       
@@ -314,68 +346,103 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
       console.log('📋 [MoreScreen] Final URL:', url);
       console.log('📋 [MoreScreen] Method:', method);
       
-      const response = await fetchWithAuth(url, {
-        method: method,
-      });
+      try {
+        const response = await fetchWithAuth(url, {
+          method: method,
+        });
 
-      const data = await response.json();
-      console.log('📥 [MoreScreen] Logout Response Status:', response.status);
-      console.log('📥 [MoreScreen] Logout Response:', JSON.stringify(data, null, 2));
+        const data = await response.json();
+        console.log('📥 [MoreScreen] Logout Response Status:', response.status);
+        console.log('📥 [MoreScreen] Logout Response:', JSON.stringify(data, null, 2));
+
+        if (response.ok && (data.code === 200 || data.status === 'success')) {
+          console.log('✅ [MoreScreen] Logout API call successful');
+        } else {
+          console.log('⚠️  [MoreScreen] Logout API returned non-success status, but continuing with logout');
+        }
+      } catch (apiError) {
+        console.error('❌ [MoreScreen] Logout API error (continuing with logout):', apiError);
+        // Continue with logout even if API call fails
+      }
 
       // Clear tokens regardless of API response
       console.log('🗑️  [MoreScreen] Clearing tokens...');
       await clearTokens();
       console.log('✅ [MoreScreen] Tokens cleared');
       
-      if (response.ok && (data.code === 200 || data.status === 'success')) {
-        console.log('✅ [MoreScreen] Logout successful');
-        showToast('Logged out successfully', 'success');
-        if (onLogout) {
-          console.log('🔄 [MoreScreen] Calling onLogout callback');
-          onLogout();
-        }
+      // Show toast
+      showToast('Logged out successfully', 'success');
+      
+      // Call onLogout callback to navigate to OTP screen and clear all data
+      if (onLogout) {
+        console.log('🔄 [MoreScreen] Calling onLogout callback to navigate to OTP screen');
+        onLogout();
       } else {
-        // Even if API fails, clear tokens and logout
-        console.log('⚠️  [MoreScreen] Logout API failed but tokens cleared');
-        showToast('Logged out successfully', 'success');
-        if (onLogout) {
-          console.log('🔄 [MoreScreen] Calling onLogout callback');
-          onLogout();
-        }
+        console.warn('⚠️  [MoreScreen] onLogout callback not provided');
       }
     } catch (error) {
-      console.error('❌ [MoreScreen] Error logging out:', error);
-      // Clear tokens even if API call fails
-      console.log('🗑️  [MoreScreen] Clearing tokens after error...');
-      await clearTokens();
-      console.log('✅ [MoreScreen] Tokens cleared');
+      console.error('❌ [MoreScreen] Error during logout process:', error);
+      // Clear tokens even if there's an error
+      try {
+        await clearTokens();
+        console.log('✅ [MoreScreen] Tokens cleared after error');
+      } catch (clearError) {
+        console.error('❌ [MoreScreen] Error clearing tokens:', clearError);
+      }
+      
       showToast('Logged out successfully', 'success');
+      
+      // Call onLogout callback even if there's an error
       if (onLogout) {
-        console.log('🔄 [MoreScreen] Calling onLogout callback');
+        console.log('🔄 [MoreScreen] Calling onLogout callback after error');
         onLogout();
       }
     } finally {
       setIsLoggingOut(false);
       console.log('📡 [MoreScreen] Logout process completed');
+      console.log('📡 [MoreScreen] ========================================');
     }
   };
 
-  // Simple icon renderer - using text/emoji as placeholders since we don't have all icons
-  const renderIcon = (iconType) => {
-    const iconMap = {
-      outlet_timings: '🕐',
-      prep_time: '⏱️',
-      settings: '⚙️',
-      past_orders: '📋',
-      faqs: '❓',
-      compliance: '📄',
-      help: '🎧',
-      logout: '🚪',
-      chevron: '›',
-    };
-    return (
-      <Text style={styles.iconText}>{iconMap[iconType] || '•'}</Text>
-    );
+  // Check if backend provides actual icon URL/image (not just identifier)
+  const hasBackendIcon = (item) => {
+    // Only return true if backend provides actual icon URL/image
+    // Check for URL patterns (http/https) or image data
+    const iconUrl = item?.icon_url || item?.icon_image;
+    if (iconUrl && (iconUrl.startsWith('http://') || iconUrl.startsWith('https://') || iconUrl.startsWith('data:'))) {
+      return true;
+    }
+    // Don't show icons if backend only provides identifier strings like "outlet_timings"
+    return false;
+  };
+
+  // Render icon only if backend provides icon URL/image
+  const renderIcon = (item) => {
+    // Only render if backend provides actual icon URL/image
+    if (item?.icon_url) {
+      return (
+        <Image
+          source={{ uri: item.icon_url }}
+          style={styles.menuItemIconImage}
+          resizeMode="contain"
+        />
+      );
+    } else if (item?.icon_image) {
+      return (
+        <Image
+          source={{ uri: item.icon_image }}
+          style={styles.menuItemIconImage}
+          resizeMode="contain"
+        />
+      );
+    }
+    // Don't render anything if backend doesn't provide icon
+    return null;
+  };
+
+  // Render chevron arrow
+  const renderChevron = () => {
+    return <Text style={styles.chevron}>›</Text>;
   };
 
   // Log header data source whenever configData changes
@@ -550,13 +617,15 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
                 activeOpacity={0.7}
               >
                 <View style={styles.menuItemLeft}>
-                  <View style={styles.menuItemIcon}>
-                    {renderIcon(item.icon)}
-                  </View>
+                  {hasBackendIcon(item) && (
+                    <View style={styles.menuItemIcon}>
+                      {renderIcon(item)}
+                    </View>
+                  )}
                   <Text style={styles.menuItemLabel}>{item.title}</Text>
                 </View>
                 {item.show_arrow !== false && (
-                  <Text style={styles.chevron}>{renderIcon('chevron')}</Text>
+                  renderChevron()
                 )}
               </TouchableOpacity>
             ))}
@@ -574,13 +643,15 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
                 activeOpacity={0.7}
               >
                 <View style={styles.menuItemLeft}>
-                  <View style={styles.menuItemIcon}>
-                    {renderIcon(item.icon)}
-                  </View>
+                  {hasBackendIcon(item) && (
+                    <View style={styles.menuItemIcon}>
+                      {renderIcon(item)}
+                    </View>
+                  )}
                   <Text style={styles.menuItemLabel}>{item.title}</Text>
                 </View>
                 {item.show_arrow !== false && (
-                  <Text style={styles.chevron}>{renderIcon('chevron')}</Text>
+                  renderChevron()
                 )}
               </TouchableOpacity>
             ))}
@@ -596,30 +667,32 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation }) => {
             disabled={isLoggingOut}
           >
             <View style={styles.menuItemLeft}>
-              <View style={styles.menuItemIcon}>
-                {isLoggingOut ? (
+              {isLoggingOut ? (
+                <View style={styles.menuItemIcon}>
                   <ActivityIndicator size="small" color="#000000" />
-                ) : (
-                  renderIcon(moreData.logout_section[0].icon || 'logout')
-                )}
-              </View>
+                </View>
+              ) : hasBackendIcon(moreData.logout_section[0]) ? (
+                <View style={styles.menuItemIcon}>
+                  {renderIcon(moreData.logout_section[0])}
+                </View>
+              ) : null}
               <Text style={styles.logoutLabel}>
                 {moreData.logout_section[0].title || 'Logout'}
               </Text>
             </View>
             {moreData.logout_section[0].show_arrow !== false && (
-              <Text style={styles.chevron}>{renderIcon('chevron')}</Text>
+              renderChevron()
             )}
           </TouchableOpacity>
         )}
 
         {/* Branding Section */}
         <View style={styles.brandingSection}>
-          <View style={styles.brandingContent}>
-            <Text style={styles.brandingIcon}>🏪</Text>
-            <Text style={styles.brandingText}>Kamai24</Text>
-          </View>
-          <Text style={styles.brandingTagline}>Apni Dukaan.</Text>
+          <Image
+            source={images.splashIcon}
+            style={styles.brandingImage}
+            resizeMode="contain"
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -740,10 +813,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   helpSectionContainer: {
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    marginTop: 8,
+    paddingTop: 0,
   },
   menuItem: {
     flexDirection: 'row',
@@ -766,8 +836,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  iconText: {
-    fontSize: 20,
+  menuItemIconImage: {
+    width: 24,
+    height: 24,
   },
   menuItemLabel: {
     fontFamily: Poppins.regular,
@@ -793,32 +864,17 @@ const styles = StyleSheet.create({
   logoutLabel: {
     fontFamily: Poppins.regular,
     fontSize: 16,
-    color: '#000000',
+    color: '#FF6E1A',
   },
   brandingSection: {
-    alignItems: 'center',
-    paddingTop: 40,
+    alignItems: 'flex-start',
+    paddingTop: 20,
     paddingBottom: 20,
+    // paddingHorizontal: 20,
   },
-  brandingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  brandingIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  brandingText: {
-    fontFamily: Poppins.bold,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  brandingTagline: {
-    fontFamily: Poppins.regular,
-    fontSize: 14,
-    color: '#666666',
+  brandingImage: {
+    width: 150,
+    height: 60,
   },
 });
 

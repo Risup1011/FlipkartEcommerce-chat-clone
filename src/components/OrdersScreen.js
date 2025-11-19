@@ -17,10 +17,10 @@ import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
-const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceived }) => {
+const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceived, onLogout, initialTab }) => {
   const { showToast } = useToast();
   const [isOnline, setIsOnline] = useState(true);
-  const [activeTab, setActiveTab] = useState('preparing');
+  const [activeTab, setActiveTab] = useState(initialTab || 'preparing');
   const [activeBottomTab, setActiveBottomTab] = useState('orders');
   const [orderCount, setOrderCount] = useState(5); // Example order count
   const [showNewOrdersModal, setShowNewOrdersModal] = useState(false);
@@ -32,6 +32,14 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   const [isLoadingConfigData, setIsLoadingConfigData] = useState(true);
   const tabsScrollViewRef = useRef(null);
   const tabPositions = useRef({});
+
+  // Update activeTab when initialTab prop changes
+  useEffect(() => {
+    if (initialTab) {
+      console.log('📡 [OrdersScreen] Setting initial tab to:', initialTab);
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Watch for new orders and automatically open the modal
   useEffect(() => {
@@ -412,7 +420,12 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     return (
       <SafeAreaView style={styles.fullScreenContainer} edges={['top', 'left', 'right']}>
         <View style={styles.menuScreenWrapper}>
-          <MoreScreen partnerStatus={partnerStatus} />
+          <MoreScreen 
+            partnerStatus={partnerStatus} 
+            onLogout={onLogout}
+            onNavigate={onNavigate}
+            configData={configData}
+          />
         </View>
         {/* Bottom Navigation Bar */}
         <View style={styles.bottomNav}>
