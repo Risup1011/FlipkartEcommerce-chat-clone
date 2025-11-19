@@ -27,4 +27,5 @@ export const icons = {
   search: require('./icon/Search.png'),
   orderCount: require('./icon/OrderCount.png'),
   cooking: require('./icon/cooking.png'),
+  powerOnOff: require('./icon/power-On-off.png'),
 };

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
-import { TouchableOpacity, View, StyleSheet, Animated, Text } from 'react-native';
+import { TouchableOpacity, View, StyleSheet, Animated, Image } from 'react-native';
+import { icons } from '../assets';
 
 export default function PowerToggle({ value = false, onValueChange, disabled = false }) {
   const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
@@ -31,9 +32,11 @@ export default function PowerToggle({ value = false, onValueChange, disabled = f
     >
       <View style={[styles.track, value ? styles.trackOn : styles.trackOff]}>
         <Animated.View style={[styles.circle, { transform: [{ translateX: circleTranslate }] }]}>
-          <Text style={styles.circleText}>
-            {value ? '拔' : '坡'}
-          </Text>
+          <Image 
+            source={icons.powerOnOff} 
+            style={styles.icon}
+            resizeMode="contain"
+          />
         </Animated.View>
       </View>
     </TouchableOpacity>
@@ -49,22 +52,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   trackOff: {
-    backgroundColor: '#e5e5e5',   // light gray like your image
+    backgroundColor: '#f44336',   // red for off state
   },
   trackOn: {
-    backgroundColor: '#FF6E1A',   // orange color matching app theme
+    backgroundColor: '#4CAF50',   // green for on state
   },
   circle: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#8a8a8a',  // dark gray circle like image
+    backgroundColor: '#FFFFFF',  // white circle
     justifyContent: 'center',
     alignItems: 'center',
   },
-  circleText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  icon: {
+    width: 18,
+    height: 18,
   },
 });
