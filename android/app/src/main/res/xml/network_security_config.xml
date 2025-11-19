@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext (HTTP) traffic for the staging API domain -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">kamai24-stage.eba-aejbahak.ap-south-1.elasticbeanstalk.com</domain>
+    </domain-config>
+    
+    <!-- For development: Allow all cleartext traffic (remove in production) -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

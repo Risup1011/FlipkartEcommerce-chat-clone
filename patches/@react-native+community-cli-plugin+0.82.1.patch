@@ -1,0 +1,188 @@
+diff --git a/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/buildBundle.js b/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/buildBundle.js
+index 90a189d..b3afc5b 100644
+--- a/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/buildBundle.js
++++ b/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/buildBundle.js
+@@ -15,6 +15,26 @@ var _fs = require("fs");
+ var _metro = require("metro");
+ var _path = _interopRequireDefault(require("path"));
+ var _util = require("util");
++// Polyfill for styleText if not available (Node.js < 20.10.0 or compatibility issue)
++if (typeof _util.styleText !== 'function') {
++  _util.styleText = function(style, text) {
++    const colors = {
++      'blue': '\x1b[34m',
++      'red': '\x1b[31m',
++      'dim': '\x1b[2m',
++      'bold': '\x1b[1m',
++      'white': '\x1b[37m',
++      'inverse': '\x1b[7m',
++      'underline': '\x1b[4m',
++    };
++    const reset = '\x1b[0m';
++    if (Array.isArray(style)) {
++      const codes = style.map(s => colors[s] || '').join('');
++      return codes + text + reset;
++    }
++    return (colors[style] || '') + text + reset;
++  };
++}
+ function _interopRequireDefault(e) {
+   return e && e.__esModule ? e : { default: e };
+ }
+diff --git a/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/saveAssets.js b/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/saveAssets.js
+index 6ca7e2e..7cee94e 100644
+--- a/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/saveAssets.js
++++ b/node_modules/@react-native/community-cli-plugin/dist/commands/bundle/saveAssets.js
+@@ -20,6 +20,26 @@ var _getAssetDestPathIOS = _interopRequireDefault(
+ var _fs = _interopRequireDefault(require("fs"));
+ var _path = _interopRequireDefault(require("path"));
+ var _util = require("util");
++// Polyfill for styleText if not available (Node.js < 20.10.0 or compatibility issue)
++if (typeof _util.styleText !== 'function') {
++  _util.styleText = function(style, text) {
++    const colors = {
++      'blue': '\x1b[34m',
++      'red': '\x1b[31m',
++      'dim': '\x1b[2m',
++      'bold': '\x1b[1m',
++      'white': '\x1b[37m',
++      'inverse': '\x1b[7m',
++      'underline': '\x1b[4m',
++    };
++    const reset = '\x1b[0m';
++    if (Array.isArray(style)) {
++      const codes = style.map(s => colors[s] || '').join('');
++      return codes + text + reset;
++    }
++    return (colors[style] || '') + text + reset;
++  };
++}
+ function _interopRequireDefault(e) {
+   return e && e.__esModule ? e : { default: e };
+ }
+diff --git a/node_modules/@react-native/community-cli-plugin/dist/commands/start/OpenDebuggerKeyboardHandler.js b/node_modules/@react-native/community-cli-plugin/dist/commands/start/OpenDebuggerKeyboardHandler.js
+index 0cf1a38..abac09c 100644
+--- a/node_modules/@react-native/community-cli-plugin/dist/commands/start/OpenDebuggerKeyboardHandler.js
++++ b/node_modules/@react-native/community-cli-plugin/dist/commands/start/OpenDebuggerKeyboardHandler.js
+@@ -5,6 +5,26 @@ Object.defineProperty(exports, "__esModule", {
+ });
+ exports.default = void 0;
+ var _util = require("util");
++// Polyfill for styleText if not available (Node.js < 20.10.0 or compatibility issue)
++if (typeof _util.styleText !== 'function') {
++  _util.styleText = function(style, text) {
++    const colors = {
++      'blue': '\x1b[34m',
++      'red': '\x1b[31m',
++      'dim': '\x1b[2m',
++      'bold': '\x1b[1m',
++      'white': '\x1b[37m',
++      'inverse': '\x1b[7m',
++      'underline': '\x1b[4m',
++    };
++    const reset = '\x1b[0m';
++    if (Array.isArray(style)) {
++      const codes = style.map(s => colors[s] || '').join('');
++      return codes + text + reset;
++    }
++    return (colors[style] || '') + text + reset;
++  };
++}
+ class OpenDebuggerKeyboardHandler {
+   #devServerUrl;
+   #reporter;
+diff --git a/node_modules/@react-native/community-cli-plugin/dist/commands/start/attachKeyHandlers.js b/node_modules/@react-native/community-cli-plugin/dist/commands/start/attachKeyHandlers.js
+index e99086b..5adff46 100644
+--- a/node_modules/@react-native/community-cli-plugin/dist/commands/start/attachKeyHandlers.js
++++ b/node_modules/@react-native/community-cli-plugin/dist/commands/start/attachKeyHandlers.js
+@@ -11,6 +11,26 @@ var _invariant = _interopRequireDefault(require("invariant"));
+ var _readline = _interopRequireDefault(require("readline"));
+ var _tty = require("tty");
+ var _util = require("util");
++// Polyfill for styleText if not available (Node.js < 20.10.0 or compatibility issue)
++if (typeof _util.styleText !== 'function') {
++  _util.styleText = function(style, text) {
++    const colors = {
++      'blue': '\x1b[34m',
++      'red': '\x1b[31m',
++      'dim': '\x1b[2m',
++      'bold': '\x1b[1m',
++      'white': '\x1b[37m',
++      'inverse': '\x1b[7m',
++      'underline': '\x1b[4m',
++    };
++    const reset = '\x1b[0m';
++    if (Array.isArray(style)) {
++      const codes = style.map(s => colors[s] || '').join('');
++      return codes + text + reset;
++    }
++    return (colors[style] || '') + text + reset;
++  };
++}
+ function _interopRequireDefault(e) {
+   return e && e.__esModule ? e : { default: e };
+ }
+diff --git a/node_modules/@react-native/community-cli-plugin/dist/commands/start/runServer.js b/node_modules/@react-native/community-cli-plugin/dist/commands/start/runServer.js
+index 7fb3d6b..0ac1480 100644
+--- a/node_modules/@react-native/community-cli-plugin/dist/commands/start/runServer.js
++++ b/node_modules/@react-native/community-cli-plugin/dist/commands/start/runServer.js
+@@ -22,6 +22,28 @@ var _metroCore = require("metro-core");
+ var _path = _interopRequireDefault(require("path"));
+ var _url = _interopRequireDefault(require("url"));
+ var _util = require("util");
++// Polyfill for styleText if not available (Node.js < 20.10.0 or compatibility issue)
++if (typeof _util.styleText !== 'function') {
++  _util.styleText = function(style, text) {
++    // Simple ANSI color codes fallback
++    const colors = {
++      'blue': '\x1b[34m',
++      'red': '\x1b[31m',
++      'dim': '\x1b[2m',
++      'bold': '\x1b[1m',
++      'white': '\x1b[37m',
++      'inverse': '\x1b[7m',
++      'underline': '\x1b[4m',
++    };
++    const reset = '\x1b[0m';
++    
++    if (Array.isArray(style)) {
++      const codes = style.map(s => colors[s] || '').join('');
++      return codes + text + reset;
++    }
++    return (colors[style] || '') + text + reset;
++  };
++}
+ function _interopRequireWildcard(e, t) {
+   if ("function" == typeof WeakMap)
+     var r = new WeakMap(),
+diff --git a/node_modules/@react-native/community-cli-plugin/dist/utils/version.js b/node_modules/@react-native/community-cli-plugin/dist/utils/version.js
+index 1719e78..aaecd15 100644
+--- a/node_modules/@react-native/community-cli-plugin/dist/utils/version.js
++++ b/node_modules/@react-native/community-cli-plugin/dist/utils/version.js
+@@ -7,6 +7,26 @@ exports.default = getLatestRelease;
+ exports.logIfUpdateAvailable = logIfUpdateAvailable;
+ var _semver = _interopRequireDefault(require("semver"));
+ var _util = require("util");
++// Polyfill for styleText if not available (Node.js < 20.10.0 or compatibility issue)
++if (typeof _util.styleText !== 'function') {
++  _util.styleText = function(style, text) {
++    const colors = {
++      'blue': '\x1b[34m',
++      'red': '\x1b[31m',
++      'dim': '\x1b[2m',
++      'bold': '\x1b[1m',
++      'white': '\x1b[37m',
++      'inverse': '\x1b[7m',
++      'underline': '\x1b[4m',
++    };
++    const reset = '\x1b[0m';
++    if (Array.isArray(style)) {
++      const codes = style.map(s => colors[s] || '').join('');
++      return codes + text + reset;
++    }
++    return (colors[style] || '') + text + reset;
++  };
++}
+ function _interopRequireDefault(e) {
+   return e && e.__esModule ? e : { default: e };
+ }
