@@ -102,6 +102,8 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
             item_type: item.item_type || 'VEG',
             sub_category_id: item.sub_category_id || null,
             display_order: item.display_order || 0,
+            variants: item.variants || [], // Include variants from API
+            add_ons: item.add_ons || [], // Include add_ons from API
           }));
 
           return {
@@ -821,10 +823,14 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
     const item = category?.items.find(i => i.id === itemId);
     
     if (item) {
-      // Set up editing state
+      console.log('📋 [MenuScreen] Editing item:', item.name);
+      console.log('📋 [MenuScreen] Item variants:', item.variants ? JSON.stringify(item.variants, null, 2) : 'none');
+      
+      // Set up editing state - ensure variants are included
       setEditingItem({
         ...item,
         categoryId: categoryId,
+        variants: item.variants || [], // Explicitly include variants
       });
       setSelectedCategoryId(categoryId);
       setSelectedItemId(itemId);
@@ -979,6 +985,30 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Show AddQuantityScreen when configuring quantity variant
   if (showAddQuantity) {
+    // Get the latest item data from categories to ensure we have updated variants
+    let latestItemData = pendingItemData || editingItem;
+    if (selectedItemId && selectedCategoryId) {
+      const category = categories.find(c => c.id === selectedCategoryId);
+      const latestItem = category?.items.find(i => i.id === selectedItemId);
+      if (latestItem) {
+        // Always use the latest item from categories to ensure we have the most recent variants
+        latestItemData = {
+          ...latestItem,
+          categoryId: selectedCategoryId,
+          variants: latestItem.variants || [], // Explicitly include variants array
+        };
+        console.log('📱 [MenuScreen] Using latest item data from categories for AddQuantityScreen');
+        console.log('📱 [MenuScreen] Latest item ID:', latestItemData.id);
+        console.log('📱 [MenuScreen] Latest item variants:', latestItemData.variants && latestItemData.variants.length > 0 ? JSON.stringify(latestItemData.variants, null, 2) : 'none');
+        console.log('📱 [MenuScreen] Latest item variants count:', latestItemData.variants ? latestItemData.variants.length : 0);
+      } else {
+        console.warn('⚠️ [MenuScreen] Latest item not found in categories for ID:', selectedItemId);
+      }
+    } else {
+      console.log('📱 [MenuScreen] Using pendingItemData or editingItem (no refresh from categories)');
+      console.log('📱 [MenuScreen] ItemData variants:', latestItemData?.variants ? JSON.stringify(latestItemData.variants, null, 2) : 'none');
+    }
+    
     return (
       <AddQuantityScreen
         onBack={() => {
@@ -987,17 +1017,25 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           // Go back to variants/addons screen
           setShowItemVariantsAndAddons(true);
         }}
-        onSave={(variantData) => {
-          // TODO: Save variant data to backend
+        onSave={async (variantData) => {
+          // Variant is already saved by AddQuantityScreen, just refresh categories
           console.log('Variant data saved:', variantData);
-          showToast('Variant saved successfully', 'success');
+          // Refresh categories to get updated item with variants
+          await fetchCategories();
           setShowAddQuantity(false);
           setCurrentVariantConfig(null);
           setShowItemVariantsAndAddons(true);
         }}
+        onDelete={async () => {
+          // Variant is already deleted by AddQuantityScreen, refresh categories
+          console.log('Variant deleted, refreshing categories');
+          // Refresh categories to get updated item without the deleted variant
+          await fetchCategories();
+        }}
         variantType={currentVariantConfig?.variantType}
         variantTitle={currentVariantConfig?.variantTitle}
-        itemData={pendingItemData || editingItem}
+        itemData={latestItemData}
+        configData={configData}
       />
     );
   }
@@ -1031,6 +1069,29 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Show AddAddonsScreen when configuring add-ons
   if (showAddAddons) {
+    // Get latest item data from categories to ensure we have up-to-date add_ons
+    let latestItemData = pendingItemData || editingItem;
+    if (selectedItemId && selectedCategoryId) {
+      const category = categories.find(c => c.id === selectedCategoryId);
+      const latestItem = category?.items.find(i => i.id === selectedItemId);
+      if (latestItem) {
+        latestItemData = {
+          ...latestItem,
+          categoryId: selectedCategoryId,
+          add_ons: latestItem.add_ons || [], // Explicitly include add_ons array
+        };
+        console.log('📱 [MenuScreen] Using latest item data from categories for AddAddonsScreen');
+        console.log('📱 [MenuScreen] Latest item ID:', latestItemData.id);
+        console.log('📱 [MenuScreen] Latest item add_ons:', latestItemData.add_ons && latestItemData.add_ons.length > 0 ? JSON.stringify(latestItemData.add_ons, null, 2) : 'none');
+        console.log('📱 [MenuScreen] Latest item add_ons count:', latestItemData.add_ons ? latestItemData.add_ons.length : 0);
+      } else {
+        console.warn('⚠️ [MenuScreen] Latest item not found in categories for ID:', selectedItemId);
+      }
+    } else {
+      console.log('📱 [MenuScreen] Using pendingItemData or editingItem (no refresh from categories)');
+      console.log('📱 [MenuScreen] ItemData add_ons:', latestItemData?.add_ons ? JSON.stringify(latestItemData.add_ons, null, 2) : 'none');
+    }
+    
     return (
       <AddAddonsScreen
         onBack={() => {
@@ -1058,11 +1119,18 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
             setPendingItemData(updatedItemData);
           }
         }}
-        onSave={(addonData) => {
+        onDelete={async () => {
+          // Add-on is already deleted by AddAddonsScreen, refresh categories
+          console.log('Add-on deleted, refreshing categories');
+          // Refresh categories to get updated item without the deleted add-on
+          await fetchCategories();
+        }}
+        onSave={async (addonData) => {
           // TODO: Save addon data to backend
           console.log('Addon data saved:', addonData);
           showToast('Add-on configuration saved successfully', 'success');
-          
+          // Refresh categories to get updated item with add-ons
+          await fetchCategories();
           // Reset all states
           setShowAddAddons(false);
           setCurrentVariantConfig(null);
@@ -1080,7 +1148,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         }}
         addonType={currentVariantConfig?.addonType}
         addonTitle={currentVariantConfig?.addonTitle}
-        itemData={pendingItemData || editingItem}
+        itemData={latestItemData}
       />
     );
   }
@@ -1109,11 +1177,14 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           setEditingItem(null);
           setPendingItemData(null);
         }}
-        onNavigate={(type, config) => {
+        onNavigate={async (type, config) => {
           console.log('📱 [MenuScreen] onNavigate called:', type, config);
           // Navigate to appropriate screen based on type
           if (type === 'variant') {
             console.log('📱 [MenuScreen] Navigating to AddQuantityScreen');
+            
+            // Refresh item data from categories to ensure we have latest variants
+            // Note: We'll get the latest item data in the AddQuantityScreen render section
             setCurrentVariantConfig(config);
             setShowItemVariantsAndAddons(false);
             setShowAddQuantity(true);

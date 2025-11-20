@@ -17,7 +17,7 @@ import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 import { useToast } from './ToastContext';
 
-const AddAddonsScreen = ({ onBack, onSave, onNavigate, addonType = 'ADD_ONS', addonTitle = 'Add-ons', itemData = null, onItemDataUpdate = null }) => {
+const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallback, addonType = 'ADD_ONS', addonTitle = 'Add-ons', itemData = null, onItemDataUpdate = null }) => {
   const { showToast } = useToast();
   const [customizationTitle, setCustomizationTitle] = useState(addonTitle);
   const [isCompulsory, setIsCompulsory] = useState(true);
@@ -50,9 +50,9 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, addonType = 'ADD_ONS', ad
     fetchAllAddons();
   }, []);
 
-  // Get linked add-ons from itemData
+  // Get linked add-ons from itemData and prefill customization settings
   useEffect(() => {
-    if (itemData && itemData.add_ons && Array.isArray(itemData.add_ons)) {
+    if (itemData && itemData.add_ons && Array.isArray(itemData.add_ons) && itemData.add_ons.length > 0) {
       // Enrich linked add-ons with price information from allAddons
       const enrichedLinkedAddons = itemData.add_ons.map((linkedAddon) => {
         const addonDetails = allAddons.find((addon) => addon.id === linkedAddon.add_on_id);
@@ -63,8 +63,48 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, addonType = 'ADD_ONS', ad
       });
       setLinkedAddons(enrichedLinkedAddons);
       console.log('📋 [AddAddonsScreen] Loaded linked add-ons:', enrichedLinkedAddons);
+
+      // Prefill customization settings from the first linked add-on
+      // (assuming all add-ons in the same group share the same settings)
+      const firstLinkedAddon = enrichedLinkedAddons[0];
+      if (firstLinkedAddon) {
+        console.log('🔍 [AddAddonsScreen] Prefilling customization settings from linked add-on:', firstLinkedAddon);
+        
+        // Prefill selection type (Compulsory/Optional)
+        if (firstLinkedAddon.selection_type) {
+          const isMandatory = firstLinkedAddon.selection_type === 'MANDATORY';
+          setIsCompulsory(isMandatory);
+          console.log('✅ [AddAddonsScreen] Prefilled isCompulsory:', isMandatory);
+        }
+
+        // Prefill min selection
+        if (firstLinkedAddon.min_selection !== undefined && firstLinkedAddon.min_selection !== null) {
+          setMinSelection(String(firstLinkedAddon.min_selection));
+          console.log('✅ [AddAddonsScreen] Prefilled minSelection:', firstLinkedAddon.min_selection);
+        }
+
+        // Prefill max selection
+        if (firstLinkedAddon.max_selection !== undefined && firstLinkedAddon.max_selection !== null) {
+          // Convert 999 (unlimited) to "All", otherwise use the number
+          if (firstLinkedAddon.max_selection === 999 || firstLinkedAddon.max_selection >= 10) {
+            setMaxSelection('All');
+            console.log('✅ [AddAddonsScreen] Prefilled maxSelection: All (unlimited)');
+          } else {
+            setMaxSelection(String(firstLinkedAddon.max_selection));
+            console.log('✅ [AddAddonsScreen] Prefilled maxSelection:', firstLinkedAddon.max_selection);
+          }
+        } else {
+          // If max_selection is null, it means unlimited
+          setMaxSelection('All');
+          console.log('✅ [AddAddonsScreen] Prefilled maxSelection: All (null = unlimited)');
+        }
+      }
     } else {
       setLinkedAddons([]);
+      // Reset to defaults if no linked add-ons
+      setIsCompulsory(true);
+      setMinSelection('');
+      setMaxSelection('All');
     }
   }, [itemData, allAddons]);
 
@@ -90,6 +130,10 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, addonType = 'ADD_ONS', ad
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
         showToast('Add-on removed successfully', 'success');
+        // Call onDelete callback to refresh item data before updating local state
+        if (onDeleteCallback) {
+          await onDeleteCallback();
+        }
         // Remove from local state immediately
         setLinkedAddons((prev) => prev.filter((addon) => {
           const id = addon.add_on_id || addon.id;
