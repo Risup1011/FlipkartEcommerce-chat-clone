@@ -18,13 +18,17 @@ import CreateSubCategoryBottomSheet from './CreateSubCategoryBottomSheet';
 import AddPhotoBottomSheet from './AddPhotoBottomSheet';
 import ItemDetailsScreen from './ItemDetailsScreen';
 import ItemImageTimingScreen from './ItemImageTimingScreen';
+import ItemVariantsAndAddonsScreen from './ItemVariantsAndAddonsScreen';
+import AddQuantityScreen from './AddQuantityScreen';
+import AddAddonsScreen from './AddAddonsScreen';
 import AddOnsScreen from './AddOnsScreen';
+import AddOnsSelectionScreen from './AddOnsSelectionScreen';
 import CreateAddonBottomSheet from './CreateAddonBottomSheet';
 import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
-const MenuScreen = ({ partnerStatus }) => {
+const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('menuItems'); 
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,7 +37,13 @@ const MenuScreen = ({ partnerStatus }) => {
   const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
   const [showItemDetails, setShowItemDetails] = useState(false);
   const [showItemImageTiming, setShowItemImageTiming] = useState(false);
+  const [showItemVariantsAndAddons, setShowItemVariantsAndAddons] = useState(false);
+  const [showAddQuantity, setShowAddQuantity] = useState(false);
+  const [showAddAddons, setShowAddAddons] = useState(false);
+  const [showAddOnsSelection, setShowAddOnsSelection] = useState(false);
   const [showCreateAddonModal, setShowCreateAddonModal] = useState(false);
+  const [pendingItemData, setPendingItemData] = useState(null); // Store item data before navigating to variants screen
+  const [currentVariantConfig, setCurrentVariantConfig] = useState(null); // Store current variant/addon config
   const [addonsRefreshTrigger, setAddonsRefreshTrigger] = useState(0);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
@@ -107,29 +117,21 @@ const MenuScreen = ({ partnerStatus }) => {
           };
         });
 
-        // Sort by created_at (newest first) to show latest categories on top
-        categoriesWithData.sort((a, b) => {
-          // Sort by created_at in descending order (newest first)
-          if (a.created_at && b.created_at) {
-            const dateA = new Date(a.created_at);
-            const dateB = new Date(b.created_at);
-            // Return negative if b is newer (should come first)
-            return dateB.getTime() - dateA.getTime();
-          }
-          // Fallback: if created_at is missing, use display_order
-          return (a.display_order || 0) - (b.display_order || 0);
+        // Log the order received from backend for verification
+        console.log('📋 [MenuScreen] Categories order from backend:');
+        categoriesWithData.forEach((cat, index) => {
+          console.log(`  ${index + 1}. ${cat.name} - display_order: ${cat.display_order}, created_at: ${cat.created_at}`);
         });
 
         setCategories(categoriesWithData);
         
-        // Initialize expanded state - expand first category by default
+        // Initialize expanded state - all categories open by default
         const initialExpanded = {};
-        if (categoriesWithData.length > 0) {
-          initialExpanded[categoriesWithData[0].id] = true;
-          console.log('📋 [MenuScreen] Categories loaded:', categoriesWithData.length);
-          console.log('📋 [MenuScreen] First category expanded:', categoriesWithData[0].id);
-          console.log('📋 [MenuScreen] First category items:', categoriesWithData[0].items?.length || 0);
-        }
+        categoriesWithData.forEach((category) => {
+          initialExpanded[category.id] = true;
+        });
+        console.log('📋 [MenuScreen] Categories loaded:', categoriesWithData.length);
+        console.log('📋 [MenuScreen] All categories start open by default');
         setExpandedCategories(initialExpanded);
 
         // Log partner info and UI labels if available (for future use)
@@ -366,13 +368,18 @@ const MenuScreen = ({ partnerStatus }) => {
       console.log('📤 [MenuScreen] Method:', method);
 
       // For PUT requests, send all required fields
+      // For POST (new category), omit display_order to let backend assign it at the top
       const requestBody = {
         name: categoryData.name?.trim() || '',
         description: categoryData.description?.trim() || '',
-        display_order: categoryData.display_order !== undefined && categoryData.display_order !== null 
-          ? parseInt(categoryData.display_order) 
-          : 0,
       };
+      
+      // Only include display_order for PUT requests (editing) or if explicitly provided
+      if (isEditing || (categoryData.display_order !== undefined && categoryData.display_order !== null)) {
+        requestBody.display_order = categoryData.display_order !== undefined && categoryData.display_order !== null 
+          ? parseInt(categoryData.display_order) 
+          : 0;
+      }
 
       console.log('📤 [MenuScreen] Request Body (final):', JSON.stringify(requestBody, null, 2));
 
@@ -433,7 +440,7 @@ const MenuScreen = ({ partnerStatus }) => {
     setShowItemDetails(true);
   };
 
-  const handleSaveItem = async (itemData) => {
+  const handleSaveItem = async (itemData, shouldNavigateToVariants = false) => {
     const isEditing = !!editingItem;
     
     if (!selectedCategoryId && !isEditing) {
@@ -495,11 +502,26 @@ const MenuScreen = ({ partnerStatus }) => {
       if (response.ok && data.code === successCode && data.status === 'success') {
         showToast(`Item ${isEditing ? 'updated' : 'created'} successfully`, 'success');
         
+        // If we got a new item ID from creation, store it
+        const savedItemId = data.data?.id || selectedItemId;
+        
+        // Store item data for variants screen
+        if (shouldNavigateToVariants) {
+          setPendingItemData({ ...itemData, id: savedItemId });
+          setSelectedItemId(savedItemId);
+        }
+        
         // Reset editing state
         setEditingItem(null);
         
         // Refresh categories list to get the updated/new item
         await fetchCategories();
+        
+        // Navigate to variants screen if needed
+        if (shouldNavigateToVariants) {
+          setShowItemDetails(false);
+          setShowItemVariantsAndAddons(true);
+        }
       } else {
         // Handle error responses (409, 400, etc.)
         const errorMessage = data.message || data.error || `Failed to ${isEditing ? 'update' : 'create'} item`;
@@ -510,9 +532,16 @@ const MenuScreen = ({ partnerStatus }) => {
       console.error(`❌ [MenuScreen] Error ${editingItem ? 'updating' : 'creating'} item:`, error);
       showToast(`Failed to ${editingItem ? 'update' : 'create'} item`, 'error');
     } finally {
-      setSelectedCategoryId(null);
-      setSelectedItemId(null);
+      if (!shouldNavigateToVariants) {
+        setSelectedCategoryId(null);
+        setSelectedItemId(null);
+      }
     }
+  };
+
+  const handleNavigateToVariants = (itemData) => {
+    // Save item first, then navigate to variants screen
+    handleSaveItem(itemData, true);
   };
 
   const handleAddSubCategory = (categoryId) => {
@@ -948,6 +977,159 @@ const MenuScreen = ({ partnerStatus }) => {
     );
   }
 
+  // Show AddQuantityScreen when configuring quantity variant
+  if (showAddQuantity) {
+    return (
+      <AddQuantityScreen
+        onBack={() => {
+          setShowAddQuantity(false);
+          setCurrentVariantConfig(null);
+          // Go back to variants/addons screen
+          setShowItemVariantsAndAddons(true);
+        }}
+        onSave={(variantData) => {
+          // TODO: Save variant data to backend
+          console.log('Variant data saved:', variantData);
+          showToast('Variant saved successfully', 'success');
+          setShowAddQuantity(false);
+          setCurrentVariantConfig(null);
+          setShowItemVariantsAndAddons(true);
+        }}
+        variantType={currentVariantConfig?.variantType}
+        variantTitle={currentVariantConfig?.variantTitle}
+        itemData={pendingItemData || editingItem}
+      />
+    );
+  }
+
+  // Show AddOnsSelectionScreen when selecting add-ons to link
+  if (showAddOnsSelection) {
+    return (
+      <AddOnsSelectionScreen
+        onBack={() => {
+          // Go back to AddAddonsScreen
+          setShowAddOnsSelection(false);
+          setShowAddAddons(true);
+        }}
+        onSave={(updatedItemData) => {
+          // Add-ons linked successfully
+          showToast('Add-ons linked successfully', 'success');
+          // Go back to AddAddonsScreen instead of MenuScreen
+          setShowAddOnsSelection(false);
+          setShowAddAddons(true);
+          // Update the item data so AddAddonsScreen can show the updated linked add-ons
+          if (updatedItemData) {
+            setEditingItem(updatedItemData);
+            setPendingItemData(updatedItemData);
+          }
+        }}
+        itemData={pendingItemData || editingItem}
+        customizationData={currentVariantConfig?.customizationData}
+      />
+    );
+  }
+
+  // Show AddAddonsScreen when configuring add-ons
+  if (showAddAddons) {
+    return (
+      <AddAddonsScreen
+        onBack={() => {
+          setShowAddAddons(false);
+          setCurrentVariantConfig(null);
+          // Go back to variants/addons screen
+          setShowItemVariantsAndAddons(true);
+        }}
+        onNavigate={(type, config) => {
+          console.log('📱 [MenuScreen] AddAddonsScreen onNavigate called:', type, config);
+          if (type === 'addonsSelection') {
+            console.log('📱 [MenuScreen] Navigating to AddOnsSelectionScreen');
+            setCurrentVariantConfig({
+              ...currentVariantConfig,
+              customizationData: config.customizationData,
+            });
+            setShowAddAddons(false);
+            setShowAddOnsSelection(true);
+          }
+        }}
+        onItemDataUpdate={(updatedItemData) => {
+          // Update item data when add-ons are linked
+          if (updatedItemData) {
+            setEditingItem(updatedItemData);
+            setPendingItemData(updatedItemData);
+          }
+        }}
+        onSave={(addonData) => {
+          // TODO: Save addon data to backend
+          console.log('Addon data saved:', addonData);
+          showToast('Add-on configuration saved successfully', 'success');
+          
+          // Reset all states
+          setShowAddAddons(false);
+          setCurrentVariantConfig(null);
+          setShowItemVariantsAndAddons(false);
+          setShowItemDetails(false);
+          setSelectedCategoryId(null);
+          setSelectedItemId(null);
+          setEditingItem(null);
+          setPendingItemData(null);
+          
+          // Navigate to OrdersScreen
+          if (onNavigateToOrders) {
+            onNavigateToOrders();
+          }
+        }}
+        addonType={currentVariantConfig?.addonType}
+        addonTitle={currentVariantConfig?.addonTitle}
+        itemData={pendingItemData || editingItem}
+      />
+    );
+  }
+
+  // Show ItemVariantsAndAddonsScreen when configuring variants/add-ons
+  if (showItemVariantsAndAddons) {
+    return (
+      <ItemVariantsAndAddonsScreen
+        onBack={() => {
+          setShowItemVariantsAndAddons(false);
+          setPendingItemData(null);
+          // Optionally go back to item details or menu
+          if (editingItem || selectedItemId) {
+            setShowItemDetails(true);
+          } else {
+            setSelectedCategoryId(null);
+            setSelectedItemId(null);
+            setEditingItem(null);
+          }
+        }}
+        onNext={() => {
+          // TODO: Handle final save/navigation
+          setShowItemVariantsAndAddons(false);
+          setSelectedCategoryId(null);
+          setSelectedItemId(null);
+          setEditingItem(null);
+          setPendingItemData(null);
+        }}
+        onNavigate={(type, config) => {
+          console.log('📱 [MenuScreen] onNavigate called:', type, config);
+          // Navigate to appropriate screen based on type
+          if (type === 'variant') {
+            console.log('📱 [MenuScreen] Navigating to AddQuantityScreen');
+            setCurrentVariantConfig(config);
+            setShowItemVariantsAndAddons(false);
+            setShowAddQuantity(true);
+          } else if (type === 'addon') {
+            console.log('📱 [MenuScreen] Navigating to AddAddonsScreen');
+            setCurrentVariantConfig(config);
+            setShowItemVariantsAndAddons(false);
+            setShowAddAddons(true);
+          }
+        }}
+        itemData={pendingItemData || editingItem}
+        configData={configData}
+      />
+    );
+  }
+
   // Show ItemDetailsScreen when adding/editing an item
   if (showItemDetails) {
     return (
@@ -960,6 +1142,7 @@ const MenuScreen = ({ partnerStatus }) => {
         }}
         categoryId={selectedCategoryId}
         onSave={handleSaveItem}
+        onNext={handleNavigateToVariants}
         itemData={editingItem}
         subCategories={categories.find(c => c.id === selectedCategoryId)?.subCategories || []}
       />

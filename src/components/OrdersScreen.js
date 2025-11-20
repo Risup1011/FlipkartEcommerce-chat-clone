@@ -441,7 +441,10 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     return (
       <SafeAreaView style={styles.fullScreenContainer} edges={['top', 'left', 'right']}>
         <View style={styles.menuScreenWrapper}>
-          <MenuScreen partnerStatus={partnerStatus} />
+          <MenuScreen 
+            partnerStatus={partnerStatus} 
+            onNavigateToOrders={() => setActiveBottomTab('orders')}
+          />
         </View>
         {/* Bottom Navigation Bar */}
         <View style={styles.bottomNav}>

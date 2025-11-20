@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import CustomButton from './CustomButton';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
-const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCategories = [] }) => {
+const ItemDetailsScreen = ({ onBack, categoryId, onSave, onNext, itemData = null, subCategories = [] }) => {
   const [itemName, setItemName] = useState(itemData?.name || '');
   const [itemDescription, setItemDescription] = useState(itemData?.description || '');
   const [itemPrice, setItemPrice] = useState(itemData?.price?.toString() || '');
@@ -161,6 +161,15 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCat
     setFinalPrice(total);
   }, [itemPrice, packagingPrice, gst]);
 
+  // Find the selected sub-category object for display
+  const selectedSubCategoryOption = useMemo(() => {
+    if (!selectedSubCategoryId || !subCategories || subCategories.length === 0) {
+      return '';
+    }
+    const found = subCategories.find((sub) => sub.id === selectedSubCategoryId);
+    return found ? { label: found.name, value: found.id } : '';
+  }, [selectedSubCategoryId, subCategories]);
+
   const handleDelete = () => {
     // TODO: Implement delete functionality
     // For now, just go back
@@ -199,10 +208,17 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCat
       finalPrice: finalPrice,
     };
 
-    if (onSave) {
-      onSave(itemData);
+    // Navigate to variants/add-ons screen if onNext is provided
+    // onNext will handle saving the item, so we don't call onSave here
+    if (onNext) {
+      onNext(itemData);
+    } else {
+      // If no onNext, save the item and go back
+      if (onSave) {
+        onSave(itemData);
+      }
+      onBack();
     }
-    onBack();
   };
 
   return (
@@ -276,7 +292,7 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, itemData = null, subCat
                 <Text style={styles.label}>Sub-Category (Optional)</Text>
                 <View style={styles.dropdownWrapper}>
                   <CustomDropdown
-                    value={selectedSubCategoryId || ''}
+                    value={selectedSubCategoryOption}
                     onSelect={(value) => {
                       // Handle both object and string values from dropdown
                       const subCategoryValue = typeof value === 'object' ? (value.value || null) : (value || null);

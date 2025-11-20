@@ -28,4 +28,11 @@ export const icons = {
   orderCount: require('./icon/OrderCount.png'),
   cooking: require('./icon/cooking.png'),
   powerOnOff: require('./icon/power-On-off.png'),
+  quantity: require('./icon/Quantity.png'),
+  preparationType: require('./icon/PreparationType.png'),
+  dishSize: require('./icon/DishSize.png'),
+  base: require('./icon/Base.png'),
+  rice: require('./icon/rice.png'),
+  addOns: require('./icon/AddOns.png'),
+  extra: require('./icon/Extra.png'),
 };
