@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { StatusBar } from 'react-native'
+import { StatusBar, AppState } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Provider } from 'react-redux'
+import { store } from './src/store'
+import { clearMenuData, clearMenuDataFromStorage } from './src/store/menuSlice'
 import { SplashScreen, OTPVerificationScreen, VerificationCodeScreen, RestaurantDetailsScreen, DynamicFormScreen, FSSAIDetailsScreen, OwnerAndLocationDetailsScreen, GSTINPANDetailsScreen, BankDetailsScreen, MoUESignDetailsScreen, PackagingDetailsScreen, OrdersScreen, ApplicationUnderReviewScreen, ToastProvider, SuccessBottomSheet, OutletTimingsScreen, HelpCenterScreen, PrepTimeScreen, AccountSettingsScreen, ComplianceScreen } from './src/components'
 import { CountryPicker } from 'react-native-country-codes-picker'
 import { API_BASE_URL } from './src/config'
@@ -35,7 +38,20 @@ export default function App() {
       setIsSplashVisible(false)
     }, 3000)
 
-    return () => clearTimeout(timer)
+    // Listen for app state changes to clear Redux data when app closes
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        // App is going to background - clear Redux menu data
+        console.log('📱 [App] App going to background - clearing Redux menu data');
+        store.dispatch(clearMenuData());
+        clearMenuDataFromStorage();
+      }
+    });
+
+    return () => {
+      clearTimeout(timer);
+      subscription?.remove();
+    }
   }, [])
 
   /**
@@ -570,15 +586,28 @@ export default function App() {
   }
 
   /**
-   * Handle navigation from MoreScreen
+   * Handle navigation from MoreScreen and bottom tab navigation
    */
   const handleNavigateFromMore = (screen) => {
     console.log('📡 [App] ========================================');
-    console.log('📡 [App] NAVIGATING FROM MORESCREEN');
+    console.log('📡 [App] NAVIGATING');
     console.log('📡 [App] ========================================');
     console.log('📡 [App] Target Screen:', screen);
     
-    if (screen === 'pastOrders') {
+    // Handle bottom tab navigation (orders, menu, finance, more)
+    const bottomTabs = ['orders', 'menu', 'finance', 'more'];
+    if (bottomTabs.includes(screen)) {
+      // Navigate to OrdersScreen with the specified bottom tab active
+      console.log('📍 [App] Navigating to OrdersScreen with bottom tab:', screen);
+      setOrdersInitialBottomTab(screen);
+      setCurrentScreen('orders');
+      console.log('✅ [App] Navigation set - Screen: orders, Initial Bottom Tab:', screen);
+      // Reset initialBottomTab after navigation
+      setTimeout(() => {
+        console.log('🔄 [App] Resetting ordersInitialBottomTab');
+        setOrdersInitialBottomTab(null);
+      }, 1000);
+    } else if (screen === 'pastOrders') {
       // Navigate to OrdersScreen with Past Orders tab active
       console.log('📍 [App] Navigating to OrdersScreen with Past Orders tab');
       setOrdersInitialTab('pastOrders');
@@ -589,17 +618,6 @@ export default function App() {
         console.log('🔄 [App] Resetting ordersInitialTab');
         setOrdersInitialTab(null);
       }, 1000); // Increased timeout to ensure tab is set
-    } else if (screen === 'more') {
-      // Navigate to OrdersScreen with More tab active
-      console.log('📍 [App] Navigating to OrdersScreen with More tab');
-      setOrdersInitialBottomTab('more');
-      setCurrentScreen('orders');
-      console.log('✅ [App] Navigation set - Screen: orders, Initial Bottom Tab: more');
-      // Reset initialBottomTab after navigation
-      setTimeout(() => {
-        console.log('🔄 [App] Resetting ordersInitialBottomTab');
-        setOrdersInitialBottomTab(null);
-      }, 1000);
     } else {
       // Navigate to other screens
       console.log('📍 [App] Navigating to screen:', screen);
@@ -694,12 +712,13 @@ export default function App() {
   }
 
   return (
-    <ToastProvider>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#FFFFFF"
-        translucent={false}
-      />
+    <Provider store={store}>
+      <ToastProvider>
+        <StatusBar
+          barStyle="dark-content"
+          backgroundColor="#FFFFFF"
+          translucent={false}
+        />
       {isSplashVisible ? (
         <SplashScreen />
       ) : currentScreen === 'verification' ? (
@@ -765,25 +784,34 @@ export default function App() {
       ) : currentScreen === 'prepTime' ? (
         <PrepTimeScreen
           onBack={() => setCurrentScreen('orders')}
+          onNavigate={handleNavigateFromMore}
           configData={configData}
         />
       ) : currentScreen === 'accountSettings' ? (
         <AccountSettingsScreen
           onBack={() => setCurrentScreen('orders')}
+          onNavigate={handleNavigateFromMore}
+          configData={configData}
         />
       ) : currentScreen === 'partnerFaqs' ? (
         <HelpCenterScreen
           onBack={() => setCurrentScreen('orders')}
+          onNavigate={handleNavigateFromMore}
+          configData={configData}
           screenTitle="Partner FAQs"
           route="/partner-faqs"
         />
       ) : currentScreen === 'compliance' ? (
         <ComplianceScreen
           onBack={() => setCurrentScreen('orders')}
+          onNavigate={handleNavigateFromMore}
+          configData={configData}
         />
       ) : currentScreen === 'helpCenter' ? (
         <HelpCenterScreen
           onBack={() => setCurrentScreen('orders')}
+          onNavigate={handleNavigateFromMore}
+          configData={configData}
           screenTitle="Help Center"
           route="/help-center"
         />
@@ -863,6 +891,7 @@ export default function App() {
           />
         </>
       )}
-    </ToastProvider>
+      </ToastProvider>
+    </Provider>
   )
 }

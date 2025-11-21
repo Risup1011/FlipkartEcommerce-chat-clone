@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  ScrollView,
+  FlatList,
   TextInput,
   Switch,
   Modal,
   Alert,
 } from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { Poppins, icons } from '../assets';
 import CreateCategoryBottomSheet from './CreateCategoryBottomSheet';
@@ -27,9 +28,47 @@ import CreateAddonBottomSheet from './CreateAddonBottomSheet';
 import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
+import {
+  setCategories,
+  appendCategories,
+  setCurrentPage,
+  incrementPage,
+  setHasNext,
+  setLoading,
+  setLoadingMore,
+  setRefreshing,
+  setLastFetchedPage,
+  saveMenuDataToStorage,
+  loadMenuDataFromStorage,
+  resetPagination,
+  updateItem,
+} from '../store/menuSlice';
 
-const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
+const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger }) => {
+  
   const { showToast } = useToast();
+  const dispatch = useDispatch();
+  
+  // Get data from Redux store
+  const {
+    categories,
+    currentPage,
+    hasNext,
+    isLoading,
+    isLoadingMore,
+    isRefreshing,
+    lastFetchedPage,
+  } = useSelector((state) => state.menu);
+  
+    categoriesCount: categories?.length || 0,
+    currentPage,
+    hasNext,
+    isLoading,
+    isLoadingMore,
+    isRefreshing,
+    lastFetchedPage,
+  });
+  
   const [activeTab, setActiveTab] = useState('menuItems'); 
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
@@ -49,9 +88,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [selectedItemName, setSelectedItemName] = useState(null);
   const [editingItem, setEditingItem] = useState(null); // Track item being edited
-  const [categories, setCategories] = useState([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState({});
   const [configData, setConfigData] = useState(null);
   const [isLoadingConfigData, setIsLoadingConfigData] = useState(true);
   const [togglingItems, setTogglingItems] = useState(new Set()); // Track items being toggled
@@ -59,24 +95,133 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
   const [editingCategory, setEditingCategory] = useState(null); // Track category being edited
   const [openSubCategoryMenuId, setOpenSubCategoryMenuId] = useState(null); // Track which subcategory menu is open
   const [editingSubCategory, setEditingSubCategory] = useState(null); // Track subcategory being edited
+  const [pageCounter, setPageCounter] = useState(1); // Counter for pagination - increments on each onEndReached
+  const [searchResults, setSearchResults] = useState(null); // Store search results
+  const [isSearching, setIsSearching] = useState(false); // Track search loading state
+  const searchTimeoutRef = useRef(null); // Store timeout for debouncing
+  
+    activeTab,
+    searchQuery,
+    showCreateCategoryModal,
+    showCreateSubCategoryModal,
+    showAddPhotoModal,
+    showItemDetails,
+    showItemImageTiming,
+    showItemVariantsAndAddons,
+    showAddQuantity,
+    showAddAddons,
+    showAddOnsSelection,
+    showCreateAddonModal,
+    hasPendingItemData: !!pendingItemData,
+    hasCurrentVariantConfig: !!currentVariantConfig,
+    addonsRefreshTrigger,
+    selectedCategoryId,
+    selectedItemId,
+    selectedItemName,
+    hasEditingItem: !!editingItem,
+    hasConfigData: !!configData,
+    isLoadingConfigData,
+    togglingItemsCount: togglingItems.size,
+    openCategoryMenuId,
+    hasEditingCategory: !!editingCategory,
+    openSubCategoryMenuId,
+    hasEditingSubCategory: !!editingSubCategory,
+    pageCounter,
+    hasSearchResults: !!searchResults,
+    isSearching,
+  });
+
+  // Reset navigation state when resetNavigationTrigger changes (when bottom tab is clicked)
+  useEffect(() => {
+    if (resetNavigationTrigger) {
+      // Reset all nested navigation states
+      setShowItemDetails(false);
+      setShowItemImageTiming(false);
+      setShowItemVariantsAndAddons(false);
+      setShowAddQuantity(false);
+      setShowAddAddons(false);
+      setShowAddOnsSelection(false);
+      setShowCreateCategoryModal(false);
+      setShowCreateSubCategoryModal(false);
+      setShowAddPhotoModal(false);
+      setShowCreateAddonModal(false);
+      setPendingItemData(null);
+      setCurrentVariantConfig(null);
+      setSelectedCategoryId(null);
+      setSelectedItemId(null);
+      setSelectedItemName(null);
+      setEditingItem(null);
+      setEditingCategory(null);
+      setEditingSubCategory(null);
+      setOpenCategoryMenuId(null);
+      setOpenSubCategoryMenuId(null);
+      // Clear search if needed
+      // setSearchQuery(''); // Keep search query as user might want to keep it
+      // setSearchResults(null); // Keep search results as user might want to keep them
+    }
+  }, [resetNavigationTrigger]);
+
+  // Load cached data on mount
+  useEffect(() => {
+    const loadCachedData = async () => {
+      const cached = await loadMenuDataFromStorage();
+        hasCached: !!cached,
+        categoriesCount: cached?.categories?.length || 0,
+        lastPage: cached?.lastPage,
+      });
+      if (cached && cached.categories && cached.categories.length > 0) {
+        dispatch(setCategories(cached.categories));
+        dispatch(setLastFetchedPage(cached.lastPage));
+        dispatch(setCurrentPage(cached.lastPage + 1));
+      } else {
+      }
+    };
+    
+    loadCachedData();
+  }, [dispatch]);
 
   // Fetch complete catalog from API (categories, subcategories, items, partner info, UI labels)
-  const fetchCategories = useCallback(async () => {
-    setIsLoadingCategories(true);
+  const fetchCategories = useCallback(async (page = 1, append = false) => {
+    // Don't show main loading indicator when loading more pages
+    if (page === 1 && !append) {
+      dispatch(setLoading(true));
+    } else {
+      dispatch(setLoadingMore(true));
+    }
+    
     try {
-      const url = `${API_BASE_URL}v1/catalog/orchestrator/complete-catalog`;
-      console.log('📡 [MenuScreen] Fetching complete catalog from:', url);
+      // Build URL with pagination parameters
+      const url = `${API_BASE_URL}v1/catalog/orchestrator/complete-catalog?page=${page}&size=10`;
       
       const response = await fetchWithAuth(url, {
         method: 'GET',
       });
+        status: response.status,
+        ok: response.ok,
+      });
 
       const data = await response.json();
-      console.log('📥 [MenuScreen] Complete Catalog API Response:', JSON.stringify(data, null, 2));
+        ok: response.ok,
+        code: data.code,
+        status: data.status,
+        hasData: !!data.data,
+        categoriesCount: data.data?.categories?.length || 0,
+      });
 
       if (response.ok && (data.code === 200 || data.code === 201) && data.status === 'success') {
         const catalogData = data.data || {};
         const categoriesData = catalogData.categories || [];
+        
+        // Check if there are more pages
+        // Try multiple possible response formats for pagination info
+        const hasMore = catalogData.has_next !== undefined ? catalogData.has_next : 
+                       (catalogData.pagination?.has_next !== undefined ? catalogData.pagination.has_next : 
+                       (data.has_next !== undefined ? data.has_next :
+                       (data.pagination?.has_next !== undefined ? data.pagination.has_next :
+                       (page === 1 && categoriesData.length >= 10)))); // Fallback: assume has more on first page if we got 10+ items
+        
+        dispatch(setHasNext(hasMore));
+        dispatch(setLastFetchedPage(page));
 
         // Map the complete catalog response to our UI format
         const categoriesWithData = categoriesData.map((categoryObj) => {
@@ -89,22 +234,32 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
             is_active: sub.is_active !== undefined ? sub.is_active : true, // Include is_active for PUT requests
           }));
 
-          const items = (categoryObj.menu_items || []).map((item) => ({
-            id: item.id || item._id || Date.now().toString(),
-            name: item.name || '',
-            price: item.price || 0,
-            isVeg: item.item_type === 'VEG',
-            is_active: item.is_active !== false,
-            image: item.image_urls && item.image_urls.length > 0 ? item.image_urls[0] : null,
-            description: item.description || '',
-            packagingPrice: item.packaging_price || 0,
-            gst: item.gst_rate ? (item.gst_rate.replace('GST_', '') || '0') + '%' : '0%',
-            item_type: item.item_type || 'VEG',
-            sub_category_id: item.sub_category_id || null,
-            display_order: item.display_order || 0,
-            variants: item.variants || [], // Include variants from API
-            add_ons: item.add_ons || [], // Include add_ons from API
-          }));
+          const items = (categoryObj.menu_items || []).map((item) => {
+            // Use the last image in the array (most recently uploaded) if available
+            // Otherwise use the first image
+            const imageUrls = item.image_urls || [];
+            const imageToUse = imageUrls.length > 0 
+              ? (imageUrls.length > 1 ? imageUrls[imageUrls.length - 1] : imageUrls[0])
+              : null;
+            
+            return {
+              id: item.id || item._id || Date.now().toString(),
+              name: item.name || '',
+              price: item.price || 0,
+              isVeg: item.item_type === 'VEG',
+              is_active: item.is_active !== false,
+              image: imageToUse,
+              description: item.description || '',
+              packagingPrice: item.packaging_price || 0,
+              gst: item.gst_rate ? (item.gst_rate.replace('GST_', '') || '0') + '%' : '0%',
+              item_type: item.item_type || 'VEG',
+              sub_category_id: item.sub_category_id || null,
+              display_order: item.display_order || 0,
+              variants: item.variants || [], // Include variants from API
+              add_ons: item.add_ons || [], // Include add_ons from API
+              image_urls: imageUrls, // Store all image URLs
+            };
+          });
 
           return {
             id: category.id,
@@ -120,45 +275,129 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         });
 
         // Log the order received from backend for verification
-        console.log('📋 [MenuScreen] Categories order from backend:');
         categoriesWithData.forEach((cat, index) => {
-          console.log(`  ${index + 1}. ${cat.name} - display_order: ${cat.display_order}, created_at: ${cat.created_at}`);
         });
 
-        setCategories(categoriesWithData);
+        // Append or replace categories based on pagination
+        let categoriesToSave;
+        if (append && page > 1) {
+          dispatch(appendCategories(categoriesWithData));
+          // Calculate merged categories for saving (same logic as reducer)
+          const existingCategoryMap = new Map(categories.map(cat => [cat.id, cat]));
+          categoriesWithData.forEach((newCategory) => {
+            const existingCategory = existingCategoryMap.get(newCategory.id);
+            if (existingCategory) {
+              const mergedItems = [...existingCategory.items, ...newCategory.items];
+              const mergedSubCategories = [...existingCategory.subCategories, ...newCategory.subCategories];
+              const uniqueItems = mergedItems.filter((item, index, self) => 
+                index === self.findIndex(i => i.id === item.id)
+              );
+              const uniqueSubCategories = mergedSubCategories.filter((sub, index, self) => 
+                index === self.findIndex(s => s.id === sub.id)
+              );
+              existingCategoryMap.set(newCategory.id, {
+                ...existingCategory,
+                items: uniqueItems,
+                subCategories: uniqueSubCategories,
+              });
+            } else {
+              existingCategoryMap.set(newCategory.id, newCategory);
+            }
+          });
+          categoriesToSave = Array.from(existingCategoryMap.values());
+        } else {
+          // First page or refresh - replace all categories
+          dispatch(setCategories(categoriesWithData));
+          categoriesToSave = categoriesWithData;
+          
+        }
         
-        // Initialize expanded state - all categories open by default
-        const initialExpanded = {};
-        categoriesWithData.forEach((category) => {
-          initialExpanded[category.id] = true;
-        });
-        console.log('📋 [MenuScreen] Categories loaded:', categoriesWithData.length);
-        console.log('📋 [MenuScreen] All categories start open by default');
-        setExpandedCategories(initialExpanded);
+        // Save to AsyncStorage
+        await saveMenuDataToStorage(categoriesToSave, page);
+        
 
         // Log partner info and UI labels if available (for future use)
         if (catalogData.partner_info) {
-          console.log('📋 [MenuScreen] Partner Info:', catalogData.partner_info);
         }
         if (catalogData.ui_labels) {
-          console.log('📋 [MenuScreen] UI Labels:', catalogData.ui_labels);
         }
       } else {
         console.error('❌ [MenuScreen] Failed to fetch complete catalog:', data.message);
-        showToast(data.message || 'Failed to fetch catalog', 'error');
+        console.error('❌ [MenuScreen] Error details:', {
+          responseStatus: response.status,
+          responseOk: response.ok,
+          dataCode: data.code,
+          dataStatus: data.status,
+          dataMessage: data.message,
+        });
+        if (page === 1) {
+          showToast(data.message || 'Failed to fetch catalog', 'error');
+        } else {
+        }
       }
     } catch (error) {
       console.error('❌ [MenuScreen] Error fetching complete catalog:', error);
-      showToast('Failed to fetch catalog', 'error');
+      console.error('❌ [MenuScreen] Error stack:', error.stack);
+      if (page === 1) {
+        showToast('Failed to fetch catalog', 'error');
+      } else {
+      }
     } finally {
-      setIsLoadingCategories(false);
+      dispatch(setLoading(false));
+      dispatch(setLoadingMore(false));
+      dispatch(setRefreshing(false));
     }
-  }, [showToast]);
+  }, [showToast, dispatch, lastFetchedPage]);
 
-  // Fetch categories on mount
+  // Load next page - increments counter and fetches new page
+  const loadNextPage = useCallback(async () => {
+    if (!hasNext || isLoadingMore || isLoading) {
+      return;
+    }
+    
+    // Increment page counter
+    const nextCounter = pageCounter + 1;
+    setPageCounter(nextCounter);
+    
+    // Calculate next page to fetch (start from lastFetchedPage + 1)
+    const nextPage = lastFetchedPage + 1;
+    dispatch(setCurrentPage(nextPage));
+    await fetchCategories(nextPage, true);
+  }, [hasNext, isLoadingMore, isLoading, pageCounter, lastFetchedPage, fetchCategories, dispatch]);
+
+  // Handle end reached for FlatList pagination - increments counter
+  const handleEndReached = useCallback(() => {
+    if (hasNext && !isLoadingMore && !isLoading) {
+      loadNextPage();
+    } else {
+    }
+  }, [hasNext, isLoadingMore, isLoading, loadNextPage]);
+
+  // Refresh categories (reset pagination)
+  const refreshCategories = useCallback(async () => {
+    dispatch(setRefreshing(true));
+    dispatch(resetPagination());
+    setPageCounter(1);
+    await fetchCategories(1, false);
+  }, [fetchCategories, dispatch]);
+
+  // Fetch categories on mount - only fetch pages that weren't fetched before
   useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+    const initialFetch = async () => {
+      // If we have cached data, only fetch pages after the last fetched page
+      if (lastFetchedPage > 0) {
+        // Don't fetch again if we already have data
+        return;
+      }
+      
+      // First time - fetch from page 1
+      dispatch(resetPagination());
+      setPageCounter(1);
+      await fetchCategories(1, false);
+    };
+    
+    initialFetch();
+  }, []); // Only run on mount
 
   // Fetch config data on component mount
   useEffect(() => {
@@ -166,7 +405,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       setIsLoadingConfigData(true);
       try {
         const url = `${API_BASE_URL}v1/config`;
-        console.log('📡 [MenuScreen] Fetching config data from:', url);
         
         const response = await fetchWithAuth(url, {
           method: 'GET',
@@ -175,15 +413,15 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         const responseData = await response.json();
         
         if (response.ok && responseData?.data) {
-          console.log('✅ [MenuScreen] Config data loaded successfully');
-          console.log('📋 [MenuScreen] Full config data:', JSON.stringify(responseData.data, null, 2));
           setConfigData(responseData.data);
         } else {
           console.error('❌ [MenuScreen] Failed to load config data:', response.status);
+          console.error('❌ [MenuScreen] Response data:', responseData);
           setConfigData(null);
         }
       } catch (error) {
         console.error('❌ [MenuScreen] Error fetching config data:', error);
+        console.error('❌ [MenuScreen] Error stack:', error.stack);
         setConfigData(null);
       } finally {
         setIsLoadingConfigData(false);
@@ -195,151 +433,593 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Log header data source whenever configData changes
   useEffect(() => {
-    console.log('📋 [MenuScreen] ========================================');
-    console.log('📋 [MenuScreen] HEADER DATA SOURCE CHECK');
-    console.log('📋 [MenuScreen] ========================================');
-    console.log('📋 [MenuScreen] configData exists:', !!configData);
-    console.log('📋 [MenuScreen] partner_info exists:', !!configData?.partner_info);
     
     if (configData?.partner_info) {
-      console.log('✅ [MenuScreen] USING BACKEND DATA for header');
-      console.log('📋 [MenuScreen] Backend partner_info:', JSON.stringify(configData.partner_info, null, 2));
       
       const businessName = configData.partner_info.business_name;
       const onlineStatus = configData.partner_info.online_status;
       const closingInfo = configData.partner_info.closing_info;
       
-      console.log('📋 [MenuScreen] Business Name:', businessName ? `✅ "${businessName}" - FROM BACKEND` : '⚠️  MISSING - Using fallback: "Restaurant Name"');
-      console.log('📋 [MenuScreen] Online Status:', onlineStatus ? `✅ "${onlineStatus}" - FROM BACKEND` : '⚠️  MISSING - Using fallback: "Online"');
-      console.log('📋 [MenuScreen] Closing Info:', closingInfo ? `✅ "${closingInfo}" - FROM BACKEND` : '⚠️  MISSING - Using fallback: "Closes at 12:00 am, Tomorrow"');
     } else {
-      console.log('⚠️  [MenuScreen] USING FRONTEND FALLBACK DATA for header');
-      console.log('📋 [MenuScreen] Business Name: "Restaurant Name" (FALLBACK)');
-      console.log('📋 [MenuScreen] Online Status: "Online" (FALLBACK)');
-      console.log('📋 [MenuScreen] Closing Info: "Closes at 12:00 am, Tomorrow" (FALLBACK)');
     }
-    console.log('📋 [MenuScreen] ========================================');
   }, [configData]);
 
-  const toggleCategory = (categoryId) => {
-    setExpandedCategories((prev) => ({
-      ...prev,
-      [categoryId]: !prev[categoryId],
-    }));
-  };
-
-  const toggleItemAvailability = async (categoryId, itemId) => {
-    // Prevent multiple simultaneous toggles for the same item
-    if (togglingItems.has(itemId)) {
-      console.log('⚠️ [MenuScreen] Toggle already in progress for item:', itemId);
+  // Search API function
+  const performSearch = useCallback(async (query) => {
+    if (!query || query.trim().length === 0) {
+      setSearchResults(null);
+      setIsSearching(false);
       return;
     }
 
+    setIsSearching(true);
+    try {
+      const url = `${API_BASE_URL}v1/catalog/orchestrator/search?query=${encodeURIComponent(query.trim())}`;
+      
+      const response = await fetchWithAuth(url, {
+        method: 'GET',
+      });
+
+      const data = await response.json();
+        ok: response.ok,
+        code: data.code,
+        status: data.status,
+        hasData: !!data.data,
+      });
+
+      if (response.ok && data.code === 200 && data.status === 'success') {
+        const searchData = data.data || {};
+        const results = {
+          search_query: searchData.search_query || query,
+          total_results: searchData.total_results || 0,
+          menu_items: searchData.menu_items || [],
+        };
+        setSearchResults(results);
+      } else {
+        const errorMessage = data.message || 'Failed to search items';
+        console.error('❌ [MenuScreen] Search failed:', errorMessage);
+        const emptyResults = {
+          search_query: query,
+          total_results: 0,
+          menu_items: [],
+        };
+        setSearchResults(emptyResults);
+      }
+    } catch (error) {
+      console.error('❌ [MenuScreen] Error searching:', error);
+      console.error('❌ [MenuScreen] Error stack:', error.stack);
+      const emptyResults = {
+        search_query: query,
+        total_results: 0,
+        menu_items: [],
+      };
+      setSearchResults(emptyResults);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // If search query is empty, clear results
+    if (!searchQuery || searchQuery.trim().length === 0) {
+      setSearchResults(null);
+      setIsSearching(false);
+      searchTimeoutRef.current = null;
+      return;
+    }
+
+    // Set new timeout for debounced search
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(searchQuery);
+      searchTimeoutRef.current = null;
+    }, 500); // 500ms debounce delay
+
+    // Cleanup function
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+    };
+  }, [searchQuery, performSearch]);
+
+  // Render function for FlatList category item
+  const renderCategoryItem = useCallback(({ item: category }) => {
+    return (
+      <View style={styles.categoryContainer}>
+        {/* Category Header */}
+        <View style={styles.categoryHeader}>
+          <View style={styles.categoryHeaderLeft}>
+            <Text style={styles.categoryName}>{category.name}</Text>
+          </View>
+          <View style={styles.menuButtonContainer}>
+            <TouchableOpacity
+              style={styles.categoryMenuButton}
+              onPress={() => handleCategoryMenu(category.id)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.threeDots}>
+                <View style={styles.dot} />
+                <View style={styles.dot} />
+                <View style={styles.dot} />
+              </View>
+            </TouchableOpacity>
+            
+            {/* Category Menu Box */}
+            {openCategoryMenuId === category.id && (
+              <View style={styles.categoryMenuBox}>
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => handleEditCategory(category.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuOptionText}>Edit</Text>
+                </TouchableOpacity>
+                <View style={styles.menuDivider} />
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => handleDeleteCategory(category.id)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.menuOptionTextDelete}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Category Content */}
+        <View style={styles.categoryContent}>
+            {/* Add Item Button */}
+            <View style={styles.addItemButton}>
+              <View style={styles.addItemIcon}>
+                <Text style={styles.addItemIconText}>+</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleAddItem(category.id)}
+                activeOpacity={0.7}
+                style={{ alignSelf: 'flex-start' }}
+              >
+                <Text style={styles.addItemText}>Add an item</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Divider */}
+            <View style={styles.divider} />
+
+            {/* Add Sub-Category Link */}
+            <View style={styles.addSubCategoryButton}>
+              <TouchableOpacity
+                onPress={() => handleAddSubCategory(category.id)}
+                activeOpacity={0.7}
+                style={{ alignSelf: 'flex-start' }}
+              >
+                <Text style={styles.addSubCategoryText}>
+                  ADD NEW SUB-CATEGORY
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Sub-Categories List */}
+            {category.subCategories && category.subCategories.length > 0 && (
+              <View style={styles.subCategoriesContainer}>
+                {category.subCategories.map((subCategory) => {
+                  // Get items for this sub-category
+                  const subCategoryItems = category.items.filter(
+                    (item) => item.sub_category_id === subCategory.id
+                  );
+                  
+                  return (
+                    <View key={subCategory.id} style={styles.subCategoryItem}>
+                      <View style={styles.subCategoryHeader}>
+                        <View style={styles.subCategoryHeaderLeft}>
+                          <Text style={styles.subCategoryName}>{subCategory.name}</Text>
+                          {subCategory.description && (
+                            <Text style={styles.subCategoryDescription}>
+                              {subCategory.description}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={styles.menuButtonContainer}>
+                          <TouchableOpacity
+                            style={styles.categoryMenuButton}
+                            onPress={() => handleSubCategoryMenu(subCategory.id)}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.threeDots}>
+                              <View style={styles.dot} />
+                              <View style={styles.dot} />
+                              <View style={styles.dot} />
+                            </View>
+                          </TouchableOpacity>
+                          
+                          {/* Sub-Category Menu Box */}
+                          {openSubCategoryMenuId === subCategory.id && (
+                            <View style={styles.categoryMenuBox}>
+                              <TouchableOpacity
+                                style={styles.menuOption}
+                                onPress={() => handleEditSubCategory(category.id, subCategory.id)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.menuOptionText}>Edit</Text>
+                              </TouchableOpacity>
+                              <View style={styles.menuDivider} />
+                              <TouchableOpacity
+                                style={styles.menuOption}
+                                onPress={() => handleDeleteSubCategory(category.id, subCategory.id)}
+                                activeOpacity={0.7}
+                              >
+                                <Text style={styles.menuOptionTextDelete}>Delete</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      {subCategoryItems.length > 0 && (
+                        <View style={styles.subCategoryItemsContainer}>
+                          {subCategoryItems.map((item) => (
+                            <View key={item.id} style={styles.menuItem}>
+                              {/* Photo Placeholder */}
+                              <TouchableOpacity
+                                style={styles.photoPlaceholder}
+                                activeOpacity={0.7}
+                                onPress={() => handlePhotoPress(category.id, item.id)}
+                              >
+                                {item.image ? (
+                                  <Image
+                                    key={item.image} // Force re-render when image changes
+                                    source={{ uri: item.image }}
+                                    style={styles.photoImage}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <>
+                                    <Text style={styles.photoPlaceholderText}>
+                                      ADD PHOTO
+                                    </Text>
+                                    <View style={styles.photoAddIcon}>
+                                      <Text style={styles.photoAddIconText}>+</Text>
+                                    </View>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+
+                              {/* Item Details */}
+                              <View style={styles.itemDetails}>
+                                <View style={styles.itemHeader}>
+                                  <View style={styles.itemNameContainer}>
+                                    <View
+                                      style={[
+                                        styles.vegIndicator,
+                                        item.isVeg
+                                          ? styles.vegIndicatorGreen
+                                          : styles.vegIndicatorOrange,
+                                      ]}
+                                    />
+                                    <Text style={styles.itemName} numberOfLines={1}>
+                                      {item.name}
+                                    </Text>
+                                  </View>
+                                  <Switch
+                                    value={item.is_active}
+                                    onValueChange={() =>
+                                      toggleItemAvailability(category.id, item.id)
+                                    }
+                                    disabled={togglingItems.has(item.id)}
+                                    trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
+                                    thumbColor="#FFFFFF"
+                                    ios_backgroundColor="#E0E0E0"
+                                  />
+                                </View>
+                                <View style={styles.itemPriceRow}>
+                                  <Text style={styles.itemPrice}>₹{item.price}</Text>
+                                  <TouchableOpacity
+                                    onPress={() => handleEditItem(category.id, item.id)}
+                                    activeOpacity={0.7}
+                                    style={{ alignSelf: 'flex-start' }}
+                                  >
+                                    <Text style={styles.editInfoText}>Edit Info</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Divider between sub-categories and items without sub-category */}
+            {category.subCategories && category.subCategories.length > 0 && 
+             category.items.some(item => !item.sub_category_id) && (
+              <View style={styles.divider} />
+            )}
+
+            {/* Menu Items without sub-category */}
+            {category.items && category.items.filter(item => !item.sub_category_id).length > 0 ? (
+              category.items.filter(item => !item.sub_category_id).map((item) => (
+              <View key={item.id} style={styles.menuItem}>
+                {/* Photo Placeholder */}
+                <TouchableOpacity
+                  style={styles.photoPlaceholder}
+                  activeOpacity={0.7}
+                  onPress={() => handlePhotoPress(category.id, item.id)}
+                >
+                  {item.image ? (
+                    <Image
+                      key={item.image} // Force re-render when image changes
+                      source={{ uri: item.image }}
+                      style={styles.photoImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <>
+                      <Text style={styles.photoPlaceholderText}>
+                        ADD PHOTO
+                      </Text>
+                      <View style={styles.photoAddIcon}>
+                        <Text style={styles.photoAddIconText}>+</Text>
+                      </View>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {/* Item Details */}
+                <View style={styles.itemDetails}>
+                  <View style={styles.itemHeader}>
+                    <View style={styles.itemNameContainer}>
+                      <View
+                        style={[
+                          styles.vegIndicator,
+                          item.isVeg
+                            ? styles.vegIndicatorGreen
+                            : styles.vegIndicatorOrange,
+                        ]}
+                      />
+                      <Text style={styles.itemName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={item.is_active}
+                      onValueChange={() =>
+                        toggleItemAvailability(category.id, item.id)
+                      }
+                      disabled={togglingItems.has(item.id)}
+                      trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
+                      thumbColor="#FFFFFF"
+                      ios_backgroundColor="#E0E0E0"
+                    />
+                  </View>
+                  <View style={styles.itemPriceRow}>
+                    <Text style={styles.itemPrice}>₹{item.price}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleEditItem(category.id, item.id)}
+                      activeOpacity={0.7}
+                      style={{ alignSelf: 'flex-start' }}
+                    >
+                      <Text style={styles.editInfoText}>Edit Info</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+              ))
+            ) : (
+              category.subCategories && category.subCategories.length > 0 ? null : (
+                <View style={styles.noItemsContainer}>
+                  <Text style={styles.noItemsText}>No items in this category</Text>
+                </View>
+              )
+            )}
+          </View>
+      </View>
+    );
+  }, [categories, openCategoryMenuId, openSubCategoryMenuId, togglingItems, handleCategoryMenu, handleEditCategory, handleDeleteCategory, handleAddItem, handleAddSubCategory, handleSubCategoryMenu, handleEditSubCategory, handleDeleteSubCategory, handlePhotoPress, toggleItemAvailability, handleEditItem]);
+
+  // Footer component for FlatList
+  const renderListFooter = useCallback(() => {
+    if (isLoadingMore) {
+      return (
+        <View style={styles.loadingMoreContainer}>
+          <Text style={styles.loadingMoreText}>Loading more...</Text>
+        </View>
+      );
+    }
+    if (!hasNext && categories.length > 0) {
+      return (
+        <View style={styles.endOfListContainer}>
+          <Text style={styles.endOfListText}>No more categories to load</Text>
+        </View>
+      );
+    }
+    return null;
+  }, [isLoadingMore, hasNext, categories.length]);
+
+  // Render search result item
+  const renderSearchResultItem = useCallback((item) => {
+    // Use the last image in the array (most recently uploaded) if available
+    const imageUrls = item.image_urls || [];
+    const imageToUse = imageUrls.length > 0 
+      ? (imageUrls.length > 1 ? imageUrls[imageUrls.length - 1] : imageUrls[0])
+      : null;
+
+    return (
+      <View key={item.id} style={styles.menuItem}>
+        {/* Photo Placeholder */}
+        <TouchableOpacity
+          style={styles.photoPlaceholder}
+          activeOpacity={0.7}
+          onPress={() => {
+            // Find category ID from item
+            handlePhotoPress(item.category_id, item.id);
+          }}
+        >
+          {imageToUse ? (
+            <Image
+              key={imageToUse}
+              source={{ uri: imageToUse }}
+              style={styles.photoImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <>
+              <Text style={styles.photoPlaceholderText}>
+                ADD PHOTO
+              </Text>
+              <View style={styles.photoAddIcon}>
+                <Text style={styles.photoAddIconText}>+</Text>
+              </View>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* Item Details */}
+        <View style={styles.itemDetails}>
+          <View style={styles.itemHeader}>
+            <View style={styles.itemNameContainer}>
+              <View
+                style={[
+                  styles.vegIndicator,
+                  item.item_type === 'VEG'
+                    ? styles.vegIndicatorGreen
+                    : styles.vegIndicatorOrange,
+                ]}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {item.category_name && (
+                  <Text style={styles.searchResultCategory}>
+                    {item.category_name}
+                    {item.sub_category_name && ` • ${item.sub_category_name}`}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <Switch
+              value={item.is_active}
+              onValueChange={() => {
+                toggleItemAvailability(item.category_id, item.id);
+              }}
+              disabled={togglingItems.has(item.id)}
+              trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#E0E0E0"
+            />
+          </View>
+          <View style={styles.itemPriceRow}>
+            <Text style={styles.itemPrice}>₹{item.price}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                handleEditItem(item.category_id, item.id, item);
+              }}
+              activeOpacity={0.7}
+              style={{ alignSelf: 'flex-start' }}
+            >
+              <Text style={styles.editInfoText}>Edit Info</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }, [togglingItems]);
+
+  const toggleItemAvailability = useCallback(async (categoryId, itemId) => {
+    // Prevent multiple simultaneous toggles for the same item
+    if (togglingItems.has(itemId)) {
+      return;
+    }
+
+    // Get current categories from Redux store to ensure we have latest data
+    const currentCategories = categories;
+    
     // Find the item to get current status
-    const category = categories.find(c => c.id === categoryId);
-    if (!category) return;
+    const category = currentCategories.find(c => c.id === categoryId);
+    if (!category) {
+      console.warn('⚠️ [MenuScreen] Category not found:', categoryId);
+      return;
+    }
     
     const item = category.items.find(i => i.id === itemId);
-    if (!item) return;
+    if (!item) {
+      console.warn('⚠️ [MenuScreen] Item not found:', itemId, 'in category:', categoryId);
+      return;
+    }
     
     const newIsActive = !item.is_active;
     const previousIsActive = item.is_active;
     
+    
     // Mark item as being toggled
     setTogglingItems(prev => new Set(prev).add(itemId));
     
-    // Optimistically update UI
-    setCategories((prevCategories) =>
-      prevCategories.map((category) => {
-        if (category.id === categoryId) {
-          return {
-            ...category,
-            items: category.items.map((item) =>
-              item.id === itemId
-                ? { ...item, is_active: newIsActive }
-                : item
-            ),
-          };
-        }
-        return category;
-      })
-    );
+    // Optimistically update UI using Redux
+    dispatch(updateItem({
+      categoryId,
+      itemId,
+      updates: { is_active: newIsActive }
+    }));
 
     // Update via API
     try {
       const url = `${API_BASE_URL}v1/catalog/items/${itemId}/status`;
-      console.log('📡 [MenuScreen] Updating item status:', url);
-      console.log('📤 [MenuScreen] Request body:', JSON.stringify({ isActive: newIsActive }, null, 2));
+      const requestBody = { isActive: newIsActive };
       
       const response = await fetchWithAuth(url, {
         method: 'PATCH',
-        body: JSON.stringify({
-          isActive: newIsActive,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
-      console.log('📥 [MenuScreen] Update Item Status API Response:', JSON.stringify(data, null, 2));
+        ok: response.ok,
+        code: data.code,
+        status: data.status,
+      });
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         // Success - update state with API response to ensure sync
-        setCategories((prevCategories) =>
-          prevCategories.map((category) => {
-            if (category.id === categoryId) {
-              return {
-                ...category,
-                items: category.items.map((item) =>
-                  item.id === itemId
-                    ? { ...item, is_active: data.data?.is_active ?? newIsActive }
-                    : item
-                ),
-              };
-            }
-            return category;
-          })
-        );
+        const finalIsActive = data.data?.is_active ?? newIsActive;
+        dispatch(updateItem({
+          categoryId,
+          itemId,
+          updates: { is_active: finalIsActive }
+        }));
         showToast(`Item ${newIsActive ? 'activated' : 'deactivated'} successfully`, 'success');
       } else {
+        console.error('❌ [MenuScreen] API returned error, reverting optimistic update');
         // Revert optimistic update on error
-        setCategories((prevCategories) =>
-          prevCategories.map((category) => {
-            if (category.id === categoryId) {
-              return {
-                ...category,
-                items: category.items.map((item) =>
-                  item.id === itemId
-                    ? { ...item, is_active: previousIsActive }
-                    : item
-                ),
-              };
-            }
-            return category;
-          })
-        );
+        dispatch(updateItem({
+          categoryId,
+          itemId,
+          updates: { is_active: previousIsActive }
+        }));
         
         const errorMessage = data.message || 'Failed to update item status';
         console.error('❌ [MenuScreen] Failed to update item status:', errorMessage);
         showToast(errorMessage, 'error');
       }
     } catch (error) {
+      console.error('❌ [MenuScreen] Exception caught, reverting optimistic update');
       // Revert optimistic update on error
-      setCategories((prevCategories) =>
-        prevCategories.map((category) => {
-          if (category.id === categoryId) {
-            return {
-              ...category,
-              items: category.items.map((item) =>
-                item.id === itemId
-                  ? { ...item, is_active: previousIsActive }
-                  : item
-              ),
-            };
-          }
-          return category;
-        })
-      );
+      dispatch(updateItem({
+        categoryId,
+        itemId,
+        updates: { is_active: previousIsActive }
+      }));
       
       console.error('❌ [MenuScreen] Error updating item status:', error);
+      console.error('❌ [MenuScreen] Error stack:', error.stack);
       showToast('Failed to update item status', 'error');
     } finally {
       // Remove item from toggling set
@@ -349,7 +1029,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         return next;
       });
     }
-  };
+  }, [categories, togglingItems, dispatch, showToast]);
 
   const handleCreateCategory = () => {
     setShowCreateCategoryModal(true);
@@ -364,10 +1044,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       
       const method = isEditing ? 'PUT' : 'POST';
       
-      console.log(`📡 [MenuScreen] ${isEditing ? 'Updating' : 'Creating'} category:`, url);
-      console.log('📤 [MenuScreen] Category Data:', JSON.stringify(categoryData, null, 2));
-      console.log('📤 [MenuScreen] Editing Category ID:', isEditing ? editingCategory.id : 'N/A');
-      console.log('📤 [MenuScreen] Method:', method);
 
       // For PUT requests, send all required fields
       // For POST (new category), omit display_order to let backend assign it at the top
@@ -383,20 +1059,16 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           : 0;
       }
 
-      console.log('📤 [MenuScreen] Request Body (final):', JSON.stringify(requestBody, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: method,
         body: JSON.stringify(requestBody),
       });
 
-      console.log(`📡 [MenuScreen] Response Status: ${response.status}`);
-      console.log(`📡 [MenuScreen] Response OK: ${response.ok}`);
 
       let data;
       try {
         const responseText = await response.text();
-        console.log(`📥 [MenuScreen] Raw Response Text:`, responseText);
         data = JSON.parse(responseText);
       } catch (parseError) {
         console.error('❌ [MenuScreen] Failed to parse response:', parseError);
@@ -404,11 +1076,16 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         return;
       }
       
-      console.log(`📥 [MenuScreen] ${isEditing ? 'Update' : 'Create'} Category API Response:`, JSON.stringify(data, null, 2));
 
       const successCode = isEditing ? 200 : 201;
       // Check for success response format: { code: 200/201, status: 'success' }
       const isSuccess = response.ok && data.code === successCode && data.status === 'success';
+        isSuccess,
+        responseOk: response.ok,
+        dataCode: data.code,
+        expectedCode: successCode,
+        dataStatus: data.status,
+      });
       
       if (isSuccess) {
         showToast(`Category ${isEditing ? 'updated' : 'created'} successfully`, 'success');
@@ -416,8 +1093,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         // Reset editing state
         setEditingCategory(null);
         
-        // Refresh categories list
-        await fetchCategories();
+        // Refresh categories list (reset pagination)
+        dispatch(resetPagination());
+        setPageCounter(1);
+        await fetchCategories(1, false);
       } else {
         // Handle different error response formats
         // Format 1: { code: 400, status: 'error', message: '...' }
@@ -442,12 +1121,96 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
     setShowItemDetails(true);
   };
 
+  // Helper function to convert GST percentage to API format
+  const getGstRateFromPercent = (gstPercent) => {
+    if (!gstPercent) return 'GST_0';
+    if (typeof gstPercent === 'string' && gstPercent.startsWith('GST_')) {
+      return gstPercent;
+    }
+    const percent = parseFloat(gstPercent.toString().replace('%', '')) || 0;
+    return `GST_${percent}`;
+  };
+
   const handleSaveItem = async (itemData, shouldNavigateToVariants = false) => {
+    
     const isEditing = !!editingItem;
     
     if (!selectedCategoryId && !isEditing) {
+      console.error('❌ [MenuScreen] Category not selected');
       showToast('Category not selected', 'error');
       return;
+    }
+
+    // If editing, check if there are any changes
+    if (isEditing && editingItem) {
+      // Handle sub_category_id comparison - normalize both values
+      let newSubCategoryId = null;
+      if (itemData.sub_category_id) {
+        if (typeof itemData.sub_category_id === 'object') {
+          newSubCategoryId = itemData.sub_category_id.value || null;
+        } else if (typeof itemData.sub_category_id === 'string' && itemData.sub_category_id.trim() !== '') {
+          newSubCategoryId = itemData.sub_category_id;
+        }
+      }
+      
+      const oldSubCategoryId = editingItem.sub_category_id || null;
+      
+      // Normalize GST rate for comparison
+      // editingItem might have 'gst' as "5%" or 'gst_rate' as "GST_5"
+      // itemData has 'gst_rate' as "GST_5"
+      const newGstRate = itemData.gst_rate || 'GST_0';
+      let oldGstRate = editingItem.gst_rate;
+      if (!oldGstRate && editingItem.gst) {
+        // Convert "5%" format to "GST_5" format
+        oldGstRate = getGstRateFromPercent(editingItem.gst);
+      }
+      oldGstRate = oldGstRate || 'GST_0';
+      
+      // Compare all fields
+      const hasChanges = 
+        (editingItem.name || '').trim() !== (itemData.name || '').trim() ||
+        (editingItem.description || '').trim() !== (itemData.description || '').trim() ||
+        (editingItem.item_type || 'VEG') !== (itemData.item_type || 'VEG') ||
+        Math.abs((parseFloat(editingItem.price) || 0) - (parseFloat(itemData.price) || 0)) > 0.01 || // Use small epsilon for float comparison
+        Math.abs((parseFloat(editingItem.packagingPrice) || 0) - (parseFloat(itemData.packagingPrice) || 0)) > 0.01 ||
+        oldGstRate !== newGstRate ||
+        String(oldSubCategoryId || '') !== String(newSubCategoryId || '') ||
+        (parseInt(editingItem.display_order) || 0) !== (parseInt(itemData.display_order) || 0);
+      
+      if (!hasChanges) {
+          name: editingItem.name,
+          description: editingItem.description,
+          item_type: editingItem.item_type,
+          price: editingItem.price,
+          packagingPrice: editingItem.packagingPrice,
+          gst_rate: oldGstRate,
+          sub_category_id: oldSubCategoryId,
+          display_order: editingItem.display_order,
+        });
+          name: itemData.name,
+          description: itemData.description,
+          item_type: itemData.item_type,
+          price: itemData.price,
+          packagingPrice: itemData.packagingPrice,
+          gst_rate: newGstRate,
+          sub_category_id: newSubCategoryId,
+          display_order: itemData.display_order,
+        });
+        
+        // If navigating to variants, just proceed without API call
+        if (shouldNavigateToVariants) {
+          setPendingItemData({ ...itemData, id: selectedItemId });
+          setShowItemDetails(false);
+          setShowItemVariantsAndAddons(true);
+        } else {
+          // Just go back without showing any message
+          setSelectedCategoryId(null);
+          setSelectedItemId(null);
+          setEditingItem(null);
+        }
+        return;
+      } else {
+      }
     }
 
     try {
@@ -482,15 +1245,12 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         // Update existing item
         url = `${API_BASE_URL}v1/catalog/items/${selectedItemId}`;
         method = 'PUT';
-        console.log('📡 [MenuScreen] Updating item:', url);
       } else {
         // Create new item
         url = `${API_BASE_URL}v1/catalog/categories/${selectedCategoryId}/items`;
         method = 'POST';
-        console.log('📡 [MenuScreen] Creating item:', url);
       }
 
-      console.log('📤 [MenuScreen] Item Data:', JSON.stringify(apiPayload, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: method,
@@ -498,10 +1258,17 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       });
 
       const data = await response.json();
-      console.log(`📥 [MenuScreen] ${isEditing ? 'Update' : 'Create'} Item API Response:`, JSON.stringify(data, null, 2));
 
       const successCode = isEditing ? 200 : 201;
-      if (response.ok && data.code === successCode && data.status === 'success') {
+      const isSuccess = response.ok && data.code === successCode && data.status === 'success';
+        isSuccess,
+        responseOk: response.ok,
+        dataCode: data.code,
+        expectedCode: successCode,
+        dataStatus: data.status,
+      });
+      
+      if (isSuccess) {
         showToast(`Item ${isEditing ? 'updated' : 'created'} successfully`, 'success');
         
         // If we got a new item ID from creation, store it
@@ -516,8 +1283,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         // Reset editing state
         setEditingItem(null);
         
-        // Refresh categories list to get the updated/new item
-        await fetchCategories();
+        // Refresh categories list to get the updated/new item (reset pagination)
+        dispatch(resetPagination());
+        setPageCounter(1);
+        await fetchCategories(1, false);
         
         // Navigate to variants screen if needed
         if (shouldNavigateToVariants) {
@@ -565,8 +1334,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       
       const method = isEditing ? 'PUT' : 'POST';
       
-      console.log(`📡 [MenuScreen] ${isEditing ? 'Updating' : 'Creating'} sub-category:`, url);
-      console.log('📤 [MenuScreen] Sub-Category Data:', JSON.stringify(subCategoryData, null, 2));
 
       // For PUT requests, include is_active field (required for updates)
       const requestBody = isEditing
@@ -580,7 +1347,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           }
         : subCategoryData;
 
-      console.log('📤 [MenuScreen] Request Body (final):', JSON.stringify(requestBody, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: method,
@@ -588,7 +1354,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       });
 
       const data = await response.json();
-      console.log(`📥 [MenuScreen] ${isEditing ? 'Update' : 'Create'} Sub-Category API Response:`, JSON.stringify(data, null, 2));
 
       const successCode = isEditing ? 200 : 201;
       // Check for success response format: { code: 200/201, status: 'success' }
@@ -600,8 +1365,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         // Reset editing state
         setEditingSubCategory(null);
         
-        // Refresh categories list
-        await fetchCategories();
+        // Refresh categories list (reset pagination)
+        dispatch(resetPagination());
+        setPageCounter(1);
+        await fetchCategories(1, false);
       } else {
         // Handle different error response formats
         // Format 1: { code: 400, status: 'error', message: '...' }
@@ -652,14 +1419,12 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
             onPress: async () => {
               try {
                 const url = `${API_BASE_URL}v1/catalog/categories/${categoryId}/subcategories/${subCategoryId}`;
-                console.log('📡 [MenuScreen] Deleting sub-category:', url);
                 
                 const response = await fetchWithAuth(url, {
                   method: 'DELETE',
                 });
 
                 const data = await response.json();
-                console.log('📥 [MenuScreen] Delete Sub-Category API Response:', JSON.stringify(data, null, 2));
 
                 // Check for success response format: { code: 200, status: 'success' }
                 const isSuccess = response.ok && data.code === 200 && data.status === 'success';
@@ -667,8 +1432,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
                 if (isSuccess) {
                   showToast('Sub-category deleted successfully', 'success');
                   setOpenSubCategoryMenuId(null);
-                  // Refresh categories list
-                  await fetchCategories();
+                  // Refresh categories list (reset pagination)
+                  setCurrentPage(1);
+                  setHasNext(true);
+                  await fetchCategories(1, false);
                 } else {
                   // Handle different error response formats
                   const errorMessage = data.message || data.error || 'Failed to delete sub-category';
@@ -730,22 +1497,12 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       if (result.assets && result.assets[0]) {
         const imageUri = result.assets[0].uri;
         
-        // Update the item with the selected image
-        setCategories((prevCategories) =>
-          prevCategories.map((category) => {
-            if (category.id === selectedCategoryId) {
-              return {
-                ...category,
-                items: category.items.map((item) =>
-                  item.id === selectedItemId
-                    ? { ...item, image: imageUri }
-                    : item
-                ),
-              };
-            }
-            return category;
-          })
-        );
+        // Update the item with the selected image using Redux
+        dispatch(updateItem({
+          categoryId: selectedCategoryId,
+          itemId: selectedItemId,
+          updates: { image: imageUri }
+        }));
         
         showToast('Photo selected from gallery', 'success');
       }
@@ -788,22 +1545,12 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       if (result.assets && result.assets[0]) {
         const imageUri = result.assets[0].uri;
         
-        // Update the item with the captured image
-        setCategories((prevCategories) =>
-          prevCategories.map((category) => {
-            if (category.id === selectedCategoryId) {
-              return {
-                ...category,
-                items: category.items.map((item) =>
-                  item.id === selectedItemId
-                    ? { ...item, image: imageUri }
-                    : item
-                ),
-              };
-            }
-            return category;
-          })
-        );
+        // Update the item with the captured image using Redux
+        dispatch(updateItem({
+          categoryId: selectedCategoryId,
+          itemId: selectedItemId,
+          updates: { image: imageUri }
+        }));
         
         showToast('Photo captured successfully', 'success');
       }
@@ -817,30 +1564,55 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
     }
   };
 
-  const handleEditItem = (categoryId, itemId) => {
-    // Find the item to get its data
-    const category = categories.find(c => c.id === categoryId);
-    const item = category?.items.find(i => i.id === itemId);
+  const handleEditItem = (categoryId, itemId, searchResultItem = null) => {
+    let item = null;
+    
+    // If search result item is provided, use it directly
+    if (searchResultItem) {
+      item = searchResultItem;
+      // Map search result item to the format expected by ItemDetailsScreen
+      item = {
+        ...searchResultItem,
+        isVeg: searchResultItem.item_type === 'VEG',
+        packagingPrice: searchResultItem.packaging_price || 0,
+        gst: searchResultItem.gst_rate ? (searchResultItem.gst_rate.replace('GST_', '') || '0') + '%' : '0%',
+        image: searchResultItem.image_urls && searchResultItem.image_urls.length > 0
+          ? (searchResultItem.image_urls.length > 1 
+              ? searchResultItem.image_urls[searchResultItem.image_urls.length - 1] 
+              : searchResultItem.image_urls[0])
+          : null,
+        image_urls: searchResultItem.image_urls || [],
+        variants: searchResultItem.variants || [],
+        add_ons: searchResultItem.add_ons || [],
+        sub_category_id: searchResultItem.sub_category_id || null,
+      };
+    } else {
+      // Find the item from categories
+      const category = categories.find(c => c.id === categoryId);
+      item = category?.items.find(i => i.id === itemId);
+    }
     
     if (item) {
-      console.log('📋 [MenuScreen] Editing item:', item.name);
-      console.log('📋 [MenuScreen] Item variants:', item.variants ? JSON.stringify(item.variants, null, 2) : 'none');
       
       // Set up editing state - ensure variants are included
-      setEditingItem({
+      const editingItemData = {
         ...item,
         categoryId: categoryId,
         variants: item.variants || [], // Explicitly include variants
-      });
+      };
+      setEditingItem(editingItemData);
       setSelectedCategoryId(categoryId);
       setSelectedItemId(itemId);
       setShowItemDetails(true);
+    } else {
+      console.error('❌ [MenuScreen] Item not found for editing');
     }
   };
 
   const handleCategoryMenu = (categoryId) => {
     // Toggle menu - if already open for this category, close it; otherwise open it
-    setOpenCategoryMenuId(openCategoryMenuId === categoryId ? null : categoryId);
+    const newMenuId = openCategoryMenuId === categoryId ? null : categoryId;
+    setOpenCategoryMenuId(newMenuId);
   };
 
   const handleEditCategory = (categoryId) => {
@@ -849,6 +1621,8 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       setEditingCategory(category);
       setOpenCategoryMenuId(null);
       setShowCreateCategoryModal(true);
+    } else {
+      console.error('❌ [MenuScreen] Category not found for editing');
     }
   };
 
@@ -866,14 +1640,12 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
             onPress: async () => {
               try {
                 const url = `${API_BASE_URL}v1/catalog/categories/${categoryId}`;
-                console.log('📡 [MenuScreen] Deleting category:', url);
                 
                 const response = await fetchWithAuth(url, {
                   method: 'DELETE',
                 });
 
                 const data = await response.json();
-                console.log('📥 [MenuScreen] Delete Category API Response:', JSON.stringify(data, null, 2));
 
                 // Check for success response format: { code: 200, status: 'success' }
                 const isSuccess = response.ok && data.code === 200 && data.status === 'success';
@@ -881,8 +1653,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
                 if (isSuccess) {
                   showToast('Category deleted successfully', 'success');
                   setOpenCategoryMenuId(null);
-                  // Refresh categories list
-                  await fetchCategories();
+                  // Refresh categories list (reset pagination)
+                  setCurrentPage(1);
+                  setHasNext(true);
+                  await fetchCategories(1, false);
                 } else {
                   // Handle different error response formats
                   const errorMessage = data.message || data.error || 'Failed to delete category';
@@ -911,8 +1685,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
   const handleSaveAddon = async (addonData) => {
     try {
       const url = `${API_BASE_URL}v1/catalog/addons`;
-      console.log('📡 [MenuScreen] Creating add-on:', url);
-      console.log('📤 [MenuScreen] Add-on Data:', JSON.stringify(addonData, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: 'POST',
@@ -920,7 +1692,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
       });
 
       const data = await response.json();
-      console.log('📥 [MenuScreen] Create Add-on API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 201 && data.status === 'success') {
         showToast('Add-on created successfully', 'success');
@@ -940,28 +1711,68 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
   };
 
   const handleSaveItemImageTiming = async (imageTimingData) => {
+    
     if (!selectedItemId) {
+      console.error('❌ [MenuScreen] Item ID is missing');
       showToast('Item ID is missing', 'error');
       return;
     }
 
     try {
-      console.log('📡 [MenuScreen] Item image and timing saved:', imageTimingData);
       
-      // Images are already uploaded in ItemImageTimingScreen
-      // Just refresh categories to get updated item data with new images
-      await fetchCategories();
+      // Get the updated item data from the response
+      const updatedItemData = imageTimingData?.itemData;
+      // Try multiple possible locations for image URLs
+      const imageUrls = imageTimingData?.imageUrls || 
+                       updatedItemData?.image_urls || 
+                       updatedItemData?.imageUrls || 
+                       [];
       
-      // Show success message
-      showToast('Item images uploaded successfully', 'success');
       
-      // Close the screen
+      // Store item ID and category ID before closing screen
+      const itemIdToUpdate = selectedItemId;
+      const categoryIdToUpdate = selectedCategoryId;
+      
+      // Close the screen first
       setShowItemImageTiming(false);
       setSelectedCategoryId(null);
       setSelectedItemId(null);
       setSelectedItemName(null);
+      
+      // Optimistically update the local state with new images immediately using Redux
+      if (imageUrls.length > 0 && categoryIdToUpdate && itemIdToUpdate) {
+        // Use the last image URL (most recently uploaded) or first if only one
+        const imageToShow = imageUrls.length > 1 ? imageUrls[imageUrls.length - 1] : imageUrls[0];
+        
+        dispatch(updateItem({
+          categoryId: categoryIdToUpdate,
+          itemId: itemIdToUpdate,
+          updates: {
+            image: imageToShow,
+            image_urls: imageUrls,
+          }
+        }));
+      } else {
+        console.warn('⚠️ [MenuScreen] Could not update item image - missing data:', {
+          imageUrls: imageUrls.length,
+          categoryId: categoryIdToUpdate,
+          itemId: itemIdToUpdate,
+        });
+      }
+      
+      // Show success message
+      showToast('Item images uploaded successfully', 'success');
+      
+      // Refresh categories in background to ensure sync with backend
+      // Add a delay to ensure backend has processed the uploads and optimistic update is visible
+      setTimeout(async () => {
+        dispatch(resetPagination());
+        setPageCounter(1);
+        await fetchCategories(1, false);
+      }, 2000); // Increased delay to ensure optimistic update is visible first
     } catch (error) {
       console.error('❌ [MenuScreen] Error saving item image and timing:', error);
+      console.error('❌ [MenuScreen] Error stack:', error.stack);
       showToast('Failed to save item images and timing', 'error');
     }
   };
@@ -985,11 +1796,14 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Show AddQuantityScreen when configuring quantity variant
   if (showAddQuantity) {
+    
     // Get the latest item data from categories to ensure we have updated variants
     let latestItemData = pendingItemData || editingItem;
+    
     if (selectedItemId && selectedCategoryId) {
       const category = categories.find(c => c.id === selectedCategoryId);
       const latestItem = category?.items.find(i => i.id === selectedItemId);
+      
       if (latestItem) {
         // Always use the latest item from categories to ensure we have the most recent variants
         latestItemData = {
@@ -997,17 +1811,17 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           categoryId: selectedCategoryId,
           variants: latestItem.variants || [], // Explicitly include variants array
         };
-        console.log('📱 [MenuScreen] Using latest item data from categories for AddQuantityScreen');
-        console.log('📱 [MenuScreen] Latest item ID:', latestItemData.id);
-        console.log('📱 [MenuScreen] Latest item variants:', latestItemData.variants && latestItemData.variants.length > 0 ? JSON.stringify(latestItemData.variants, null, 2) : 'none');
-        console.log('📱 [MenuScreen] Latest item variants count:', latestItemData.variants ? latestItemData.variants.length : 0);
       } else {
         console.warn('⚠️ [MenuScreen] Latest item not found in categories for ID:', selectedItemId);
       }
     } else {
-      console.log('📱 [MenuScreen] Using pendingItemData or editingItem (no refresh from categories)');
-      console.log('📱 [MenuScreen] ItemData variants:', latestItemData?.variants ? JSON.stringify(latestItemData.variants, null, 2) : 'none');
     }
+    
+      variantType: currentVariantConfig?.variantType,
+      variantTitle: currentVariantConfig?.variantTitle,
+      hasItemData: !!latestItemData,
+      hasConfigData: !!configData,
+    });
     
     return (
       <AddQuantityScreen
@@ -1019,18 +1833,20 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         }}
         onSave={async (variantData) => {
           // Variant is already saved by AddQuantityScreen, just refresh categories
-          console.log('Variant data saved:', variantData);
-          // Refresh categories to get updated item with variants
-          await fetchCategories();
+          // Refresh categories to get updated item with variants (reset pagination)
+          dispatch(resetPagination());
+          setPageCounter(1);
+          await fetchCategories(1, false);
           setShowAddQuantity(false);
           setCurrentVariantConfig(null);
           setShowItemVariantsAndAddons(true);
         }}
         onDelete={async () => {
           // Variant is already deleted by AddQuantityScreen, refresh categories
-          console.log('Variant deleted, refreshing categories');
-          // Refresh categories to get updated item without the deleted variant
-          await fetchCategories();
+          // Refresh categories to get updated item without the deleted variant (reset pagination)
+          setCurrentPage(1);
+          setHasNext(true);
+          await fetchCategories(1, false);
         }}
         variantType={currentVariantConfig?.variantType}
         variantTitle={currentVariantConfig?.variantTitle}
@@ -1042,6 +1858,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Show AddOnsSelectionScreen when selecting add-ons to link
   if (showAddOnsSelection) {
+    
     return (
       <AddOnsSelectionScreen
         onBack={() => {
@@ -1049,17 +1866,21 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           setShowAddOnsSelection(false);
           setShowAddAddons(true);
         }}
-        onSave={(updatedItemData) => {
+        onSave={async (updatedItemData) => {
           // Add-ons linked successfully
           showToast('Add-ons linked successfully', 'success');
-          // Go back to AddAddonsScreen instead of MenuScreen
-          setShowAddOnsSelection(false);
-          setShowAddAddons(true);
           // Update the item data so AddAddonsScreen can show the updated linked add-ons
           if (updatedItemData) {
             setEditingItem(updatedItemData);
             setPendingItemData(updatedItemData);
+            // Refresh categories in background to keep them in sync
+            setCurrentPage(1);
+            setHasNext(true);
+            await fetchCategories(1, false);
           }
+          // Go back to AddAddonsScreen instead of MenuScreen
+          setShowAddOnsSelection(false);
+          setShowAddAddons(true);
         }}
         itemData={pendingItemData || editingItem}
         customizationData={currentVariantConfig?.customizationData}
@@ -1069,31 +1890,31 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Show AddAddonsScreen when configuring add-ons
   if (showAddAddons) {
-    // Get latest item data from categories to ensure we have up-to-date add_ons
+    
+    // Prioritize fresh data from API (pendingItemData/editingItem) over stale categories data
     let latestItemData = pendingItemData || editingItem;
-    if (selectedItemId && selectedCategoryId) {
+    
+    // Only use categories data if we don't have fresh data from API
+    if (!latestItemData && selectedItemId && selectedCategoryId) {
       const category = categories.find(c => c.id === selectedCategoryId);
       const latestItem = category?.items.find(i => i.id === selectedItemId);
+      
       if (latestItem) {
         latestItemData = {
           ...latestItem,
           categoryId: selectedCategoryId,
           add_ons: latestItem.add_ons || [], // Explicitly include add_ons array
         };
-        console.log('📱 [MenuScreen] Using latest item data from categories for AddAddonsScreen');
-        console.log('📱 [MenuScreen] Latest item ID:', latestItemData.id);
-        console.log('📱 [MenuScreen] Latest item add_ons:', latestItemData.add_ons && latestItemData.add_ons.length > 0 ? JSON.stringify(latestItemData.add_ons, null, 2) : 'none');
-        console.log('📱 [MenuScreen] Latest item add_ons count:', latestItemData.add_ons ? latestItemData.add_ons.length : 0);
       } else {
         console.warn('⚠️ [MenuScreen] Latest item not found in categories for ID:', selectedItemId);
       }
+    } else if (latestItemData) {
     } else {
-      console.log('📱 [MenuScreen] Using pendingItemData or editingItem (no refresh from categories)');
-      console.log('📱 [MenuScreen] ItemData add_ons:', latestItemData?.add_ons ? JSON.stringify(latestItemData.add_ons, null, 2) : 'none');
     }
     
     return (
       <AddAddonsScreen
+        configData={configData}
         onBack={() => {
           setShowAddAddons(false);
           setCurrentVariantConfig(null);
@@ -1101,36 +1922,44 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           setShowItemVariantsAndAddons(true);
         }}
         onNavigate={(type, config) => {
-          console.log('📱 [MenuScreen] AddAddonsScreen onNavigate called:', type, config);
           if (type === 'addonsSelection') {
-            console.log('📱 [MenuScreen] Navigating to AddOnsSelectionScreen');
             setCurrentVariantConfig({
               ...currentVariantConfig,
               customizationData: config.customizationData,
             });
             setShowAddAddons(false);
             setShowAddOnsSelection(true);
+          } else {
           }
         }}
-        onItemDataUpdate={(updatedItemData) => {
+        onItemDataUpdate={async (updatedItemData) => {
           // Update item data when add-ons are linked
           if (updatedItemData) {
             setEditingItem(updatedItemData);
             setPendingItemData(updatedItemData);
+            // Refresh categories in background to keep them in sync
+            setCurrentPage(1);
+            setHasNext(true);
+            await fetchCategories(1, false);
+          } else {
+            console.warn('⚠️ [MenuScreen] onItemDataUpdate called with no data');
           }
         }}
         onDelete={async () => {
           // Add-on is already deleted by AddAddonsScreen, refresh categories
-          console.log('Add-on deleted, refreshing categories');
-          // Refresh categories to get updated item without the deleted add-on
-          await fetchCategories();
+          // Refresh categories to get updated item without the deleted add-on (reset pagination)
+          setCurrentPage(1);
+          setHasNext(true);
+          await fetchCategories(1, false);
         }}
         onSave={async (addonData) => {
           // TODO: Save addon data to backend
-          console.log('Addon data saved:', addonData);
           showToast('Add-on configuration saved successfully', 'success');
-          // Refresh categories to get updated item with add-ons
-          await fetchCategories();
+          // Refresh categories to get updated item with add-ons (reset pagination)
+          setCurrentPage(1);
+          setHasNext(true);
+          await fetchCategories(1, false);
+          
           // Reset all states
           setShowAddAddons(false);
           setCurrentVariantConfig(null);
@@ -1144,6 +1973,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           // Navigate to OrdersScreen
           if (onNavigateToOrders) {
             onNavigateToOrders();
+          } else {
           }
         }}
         addonType={currentVariantConfig?.addonType}
@@ -1155,19 +1985,17 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Show ItemVariantsAndAddonsScreen when configuring variants/add-ons
   if (showItemVariantsAndAddons) {
+    
     return (
       <ItemVariantsAndAddonsScreen
         onBack={() => {
+          // Navigate directly to MenuScreen - reset all states
           setShowItemVariantsAndAddons(false);
           setPendingItemData(null);
-          // Optionally go back to item details or menu
-          if (editingItem || selectedItemId) {
-            setShowItemDetails(true);
-          } else {
-            setSelectedCategoryId(null);
-            setSelectedItemId(null);
-            setEditingItem(null);
-          }
+          setSelectedCategoryId(null);
+          setSelectedItemId(null);
+          setEditingItem(null);
+          setShowItemDetails(false);
         }}
         onNext={() => {
           // TODO: Handle final save/navigation
@@ -1178,10 +2006,8 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
           setPendingItemData(null);
         }}
         onNavigate={async (type, config) => {
-          console.log('📱 [MenuScreen] onNavigate called:', type, config);
           // Navigate to appropriate screen based on type
           if (type === 'variant') {
-            console.log('📱 [MenuScreen] Navigating to AddQuantityScreen');
             
             // Refresh item data from categories to ensure we have latest variants
             // Note: We'll get the latest item data in the AddQuantityScreen render section
@@ -1189,10 +2015,11 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
             setShowItemVariantsAndAddons(false);
             setShowAddQuantity(true);
           } else if (type === 'addon') {
-            console.log('📱 [MenuScreen] Navigating to AddAddonsScreen');
             setCurrentVariantConfig(config);
             setShowItemVariantsAndAddons(false);
             setShowAddAddons(true);
+          } else {
+            console.warn('⚠️ [MenuScreen] Unknown navigation type:', type);
           }
         }}
         itemData={pendingItemData || editingItem}
@@ -1203,6 +2030,8 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
 
   // Show ItemDetailsScreen when adding/editing an item
   if (showItemDetails) {
+    const subCategories = categories.find(c => c.id === selectedCategoryId)?.subCategories || [];
+    
     return (
       <ItemDetailsScreen
         onBack={() => {
@@ -1215,11 +2044,12 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
         onSave={handleSaveItem}
         onNext={handleNavigateToVariants}
         itemData={editingItem}
-        subCategories={categories.find(c => c.id === selectedCategoryId)?.subCategories || []}
+        subCategories={subCategories}
       />
     );
   }
 
+  
   return (
     <View style={styles.container}>
       {/* Top Header */}
@@ -1271,7 +2101,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
               styles.tab,
               activeTab === 'menuItems' ? styles.activeTab : styles.inactiveTab,
             ]}
-            onPress={() => setActiveTab('menuItems')}
+            onPress={() => {
+              setActiveTab('menuItems');
+            }}
             activeOpacity={0.7}
           >
             <Text
@@ -1287,7 +2119,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
               styles.tab,
               activeTab === 'addons' ? styles.activeTab : styles.inactiveTab,
             ]}
-            onPress={() => setActiveTab('addons')}
+            onPress={() => {
+              setActiveTab('addons');
+            }}
             activeOpacity={0.7}
           >
             <Text
@@ -1298,15 +2132,17 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
               Add-ons
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.createCategoryButton}
-            onPress={activeTab === 'addons' ? handleCreateAddon : handleCreateCategory}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.createCategoryText}>
-              {activeTab === 'addons' ? '+ Create New Addon' : '+ Create Category'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.createCategoryButton}>
+            <TouchableOpacity
+              onPress={activeTab === 'addons' ? handleCreateAddon : handleCreateCategory}
+              activeOpacity={0.7}
+              style={{ alignSelf: 'flex-start' }}
+            >
+              <Text style={styles.createCategoryText}>
+                {activeTab === 'addons' ? '+ Create New Addon' : '+ Create Category'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Conditional Content Based on Active Tab */}
@@ -1321,7 +2157,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
                 placeholder="Search For Items"
                 placeholderTextColor="#999"
                 value={searchQuery}
-                onChangeText={setSearchQuery}
+                onChangeText={(text) => {
+                  setSearchQuery(text);
+                }}
               />
               <TouchableOpacity style={styles.searchIconContainer} activeOpacity={0.7}>
                 <Image
@@ -1332,15 +2170,59 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Categories List */}
+            {/* Categories List / Search Results */}
             <View style={styles.categoriesListContainer}>
-              {isLoadingCategories ? (
+              {/* Show search results if searching */}
+              {searchQuery && searchQuery.trim().length > 0 ? (
+                isSearching ? (
+                  <View style={styles.emptyStateContainer}>
+                    <Image
+                      source={icons.pan}
+                      style={styles.panImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.loadingText}>Searching...</Text>
+                  </View>
+                ) : searchResults && searchResults.menu_items.length > 0 ? (
+                  <View style={styles.searchResultsContainer}>
+                    <View style={styles.searchResultsHeader}>
+                      <Text style={styles.searchResultsTitle}>
+                        {searchResults.total_results} result{searchResults.total_results !== 1 ? 's' : ''} for "{searchResults.search_query}"
+                      </Text>
+                    </View>
+                    <FlatList
+                      data={searchResults.menu_items}
+                      renderItem={({ item }) => renderSearchResultItem(item)}
+                      keyExtractor={(item) => item.id.toString()}
+                      style={styles.categoriesList}
+                      contentContainerStyle={styles.categoriesListContent}
+                      showsVerticalScrollIndicator={false}
+                      removeClippedSubviews={true}
+                      maxToRenderPerBatch={10}
+                      updateCellsBatchingPeriod={50}
+                      initialNumToRender={10}
+                      windowSize={10}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.emptyStateContainer}>
+                    <Image
+                      source={icons.pan}
+                      style={styles.panImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.noCategoriesText}>No results found</Text>
+                    <Text style={styles.noItemsText}>Try searching with different keywords</Text>
+                  </View>
+                )
+              ) : isLoading ? (
                 <View style={styles.emptyStateContainer}>
                   <Image
                     source={icons.pan}
                     style={styles.panImage}
                     resizeMode="contain"
                   />
+                  <Text style={styles.loadingText}>Loading...</Text>
                 </View>
               ) : categories.length === 0 ? (
                 <View style={styles.emptyStateContainer}>
@@ -1352,310 +2234,22 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders }) => {
                   <Text style={styles.noCategoriesText}>No Categories!</Text>
                 </View>
               ) : (
-                <ScrollView
+                <FlatList
+                  data={categories}
+                  renderItem={renderCategoryItem}
+                  keyExtractor={(item) => item.id.toString()}
                   style={styles.categoriesList}
                   contentContainerStyle={styles.categoriesListContent}
                   showsVerticalScrollIndicator={false}
-                >
-                {categories.map((category) => (
-                  <View key={category.id} style={styles.categoryContainer}>
-              {/* Category Header */}
-              <View style={styles.categoryHeader}>
-                <TouchableOpacity
-                  style={styles.categoryHeaderLeft}
-                  onPress={() => toggleCategory(category.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.categoryName}>{category.name}</Text>
-                  <Image
-                    source={icons.downArrow}
-                    style={[
-                      styles.expandIcon,
-                      expandedCategories[category.id] && styles.expandIconUp,
-                    ]}
-                    resizeMode="contain"
-                  />
-                </TouchableOpacity>
-                <View style={styles.menuButtonContainer}>
-                  <TouchableOpacity
-                    style={styles.categoryMenuButton}
-                    onPress={() => handleCategoryMenu(category.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.threeDots}>
-                      <View style={styles.dot} />
-                      <View style={styles.dot} />
-                      <View style={styles.dot} />
-                    </View>
-                  </TouchableOpacity>
-                  
-                  {/* Category Menu Box */}
-                  {openCategoryMenuId === category.id && (
-                    <View style={styles.categoryMenuBox}>
-                      <TouchableOpacity
-                        style={styles.menuOption}
-                        onPress={() => handleEditCategory(category.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.menuOptionText}>Edit</Text>
-                      </TouchableOpacity>
-                      <View style={styles.menuDivider} />
-                      <TouchableOpacity
-                        style={styles.menuOption}
-                        onPress={() => handleDeleteCategory(category.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.menuOptionTextDelete}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Category Content */}
-              {expandedCategories[category.id] && (
-                <View style={styles.categoryContent}>
-                  {/* Add Item Button */}
-                  <TouchableOpacity
-                    style={styles.addItemButton}
-                    onPress={() => handleAddItem(category.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.addItemIcon}>
-                      <Text style={styles.addItemIconText}>+</Text>
-                    </View>
-                    <Text style={styles.addItemText}>Add an item</Text>
-                  </TouchableOpacity>
-
-                  {/* Divider */}
-                  <View style={styles.divider} />
-
-                  {/* Add Sub-Category Link */}
-                  <TouchableOpacity
-                    style={styles.addSubCategoryButton}
-                    onPress={() => handleAddSubCategory(category.id)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.addSubCategoryText}>
-                      ADD NEW SUB-CATEGORY
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Sub-Categories List */}
-                  {category.subCategories && category.subCategories.length > 0 && (
-                    <View style={styles.subCategoriesContainer}>
-                      {category.subCategories.map((subCategory) => {
-                        // Get items for this sub-category
-                        const subCategoryItems = category.items.filter(
-                          (item) => item.sub_category_id === subCategory.id
-                        );
-                        
-                        return (
-                          <View key={subCategory.id} style={styles.subCategoryItem}>
-                            <View style={styles.subCategoryHeader}>
-                              <View style={styles.subCategoryHeaderLeft}>
-                                <Text style={styles.subCategoryName}>{subCategory.name}</Text>
-                                {subCategory.description && (
-                                  <Text style={styles.subCategoryDescription}>
-                                    {subCategory.description}
-                                  </Text>
-                                )}
-                              </View>
-                              <View style={styles.menuButtonContainer}>
-                                <TouchableOpacity
-                                  style={styles.categoryMenuButton}
-                                  onPress={() => handleSubCategoryMenu(subCategory.id)}
-                                  activeOpacity={0.7}
-                                >
-                                  <View style={styles.threeDots}>
-                                    <View style={styles.dot} />
-                                    <View style={styles.dot} />
-                                    <View style={styles.dot} />
-                                  </View>
-                                </TouchableOpacity>
-                                
-                                {/* Sub-Category Menu Box */}
-                                {openSubCategoryMenuId === subCategory.id && (
-                                  <View style={styles.categoryMenuBox}>
-                                    <TouchableOpacity
-                                      style={styles.menuOption}
-                                      onPress={() => handleEditSubCategory(category.id, subCategory.id)}
-                                      activeOpacity={0.7}
-                                    >
-                                      <Text style={styles.menuOptionText}>Edit</Text>
-                                    </TouchableOpacity>
-                                    <View style={styles.menuDivider} />
-                                    <TouchableOpacity
-                                      style={styles.menuOption}
-                                      onPress={() => handleDeleteSubCategory(category.id, subCategory.id)}
-                                      activeOpacity={0.7}
-                                    >
-                                      <Text style={styles.menuOptionTextDelete}>Delete</Text>
-                                    </TouchableOpacity>
-                                  </View>
-                                )}
-                              </View>
-                            </View>
-                            {subCategoryItems.length > 0 && (
-                              <View style={styles.subCategoryItemsContainer}>
-                                {subCategoryItems.map((item) => (
-                                  <View key={item.id} style={styles.menuItem}>
-                                    {/* Photo Placeholder */}
-                                    <TouchableOpacity
-                                      style={styles.photoPlaceholder}
-                                      activeOpacity={0.7}
-                                      onPress={() => handlePhotoPress(category.id, item.id)}
-                                    >
-                                      {item.image ? (
-                                        <Image
-                                          source={{ uri: item.image }}
-                                          style={styles.photoImage}
-                                          resizeMode="cover"
-                                        />
-                                      ) : (
-                                        <>
-                                          <Text style={styles.photoPlaceholderText}>
-                                            ADD PHOTO
-                                          </Text>
-                                          <View style={styles.photoAddIcon}>
-                                            <Text style={styles.photoAddIconText}>+</Text>
-                                          </View>
-                                        </>
-                                      )}
-                                    </TouchableOpacity>
-
-                                    {/* Item Details */}
-                                    <View style={styles.itemDetails}>
-                                      <View style={styles.itemHeader}>
-                                        <View style={styles.itemNameContainer}>
-                                          <View
-                                            style={[
-                                              styles.vegIndicator,
-                                              item.isVeg
-                                                ? styles.vegIndicatorGreen
-                                                : styles.vegIndicatorOrange,
-                                            ]}
-                                          />
-                                          <Text style={styles.itemName} numberOfLines={1}>
-                                            {item.name}
-                                          </Text>
-                                        </View>
-                                        <Switch
-                                          value={item.is_active}
-                                          onValueChange={() =>
-                                            toggleItemAvailability(category.id, item.id)
-                                          }
-                                          disabled={togglingItems.has(item.id)}
-                                          trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-                                          thumbColor="#FFFFFF"
-                                          ios_backgroundColor="#E0E0E0"
-                                        />
-                                      </View>
-                                      <View style={styles.itemPriceRow}>
-                                        <Text style={styles.itemPrice}>₹{item.price}</Text>
-                                        <TouchableOpacity
-                                          onPress={() => handleEditItem(category.id, item.id)}
-                                          activeOpacity={0.7}
-                                        >
-                                          <Text style={styles.editInfoText}>Edit Info</Text>
-                                        </TouchableOpacity>
-                                      </View>
-                                    </View>
-                                  </View>
-                                ))}
-                              </View>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  )}
-
-                  {/* Divider between sub-categories and items without sub-category */}
-                  {category.subCategories && category.subCategories.length > 0 && 
-                   category.items.some(item => !item.sub_category_id) && (
-                    <View style={styles.divider} />
-                  )}
-
-                  {/* Menu Items without sub-category */}
-                  {category.items && category.items.filter(item => !item.sub_category_id).length > 0 ? (
-                    category.items.filter(item => !item.sub_category_id).map((item) => (
-                    <View key={item.id} style={styles.menuItem}>
-                      {/* Photo Placeholder */}
-                      <TouchableOpacity
-                        style={styles.photoPlaceholder}
-                        activeOpacity={0.7}
-                        onPress={() => handlePhotoPress(category.id, item.id)}
-                      >
-                        {item.image ? (
-                          <Image
-                            source={{ uri: item.image }}
-                            style={styles.photoImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <>
-                            <Text style={styles.photoPlaceholderText}>
-                              ADD PHOTO
-                            </Text>
-                            <View style={styles.photoAddIcon}>
-                              <Text style={styles.photoAddIconText}>+</Text>
-                            </View>
-                          </>
-                        )}
-                      </TouchableOpacity>
-
-                      {/* Item Details */}
-                      <View style={styles.itemDetails}>
-                        <View style={styles.itemHeader}>
-                          <View style={styles.itemNameContainer}>
-                            <View
-                              style={[
-                                styles.vegIndicator,
-                                item.isVeg
-                                  ? styles.vegIndicatorGreen
-                                  : styles.vegIndicatorOrange,
-                              ]}
-                            />
-                            <Text style={styles.itemName} numberOfLines={1}>
-                              {item.name}
-                            </Text>
-                          </View>
-                          <Switch
-                            value={item.is_active}
-                            onValueChange={() =>
-                              toggleItemAvailability(category.id, item.id)
-                            }
-                            disabled={togglingItems.has(item.id)}
-                            trackColor={{ false: '#E0E0E0', true: '#4CAF50' }}
-                            thumbColor="#FFFFFF"
-                            ios_backgroundColor="#E0E0E0"
-                          />
-                        </View>
-                        <View style={styles.itemPriceRow}>
-                          <Text style={styles.itemPrice}>₹{item.price}</Text>
-                          <TouchableOpacity
-                            onPress={() => handleEditItem(category.id, item.id)}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.editInfoText}>Edit Info</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-                    ))
-                  ) : (
-                    category.subCategories && category.subCategories.length > 0 ? null : (
-                      <View style={styles.noItemsContainer}>
-                        <Text style={styles.noItemsText}>No items in this category</Text>
-                      </View>
-                    )
-                  )}
-                </View>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+                  onEndReached={handleEndReached}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={renderListFooter}
+                  removeClippedSubviews={true}
+                  maxToRenderPerBatch={10}
+                  updateCellsBatchingPeriod={50}
+                  initialNumToRender={10}
+                  windowSize={10}
+                />
               )}
             </View>
           </>
@@ -2172,6 +2766,45 @@ const styles = StyleSheet.create({
   },
   subCategoryItemsContainer: {
     marginTop: 4,
+  },
+  loadingMoreContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingMoreText: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+  },
+  endOfListContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endOfListText: {
+    fontFamily: Poppins.regular,
+    fontSize: 12,
+    color: '#999999',
+  },
+  searchResultsContainer: {
+    flex: 1,
+  },
+  searchResultsHeader: {
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  searchResultsTitle: {
+    fontFamily: Poppins.medium,
+    fontSize: 14,
+    color: '#666666',
+  },
+  searchResultCategory: {
+    fontFamily: Poppins.regular,
+    fontSize: 11,
+    color: '#999999',
+    marginTop: 2,
   },
 });
 

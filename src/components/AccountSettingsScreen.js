@@ -26,18 +26,15 @@ const AccountSettingsScreen = ({ onBack }) => {
     try {
       setIsLoading(true);
       const url = `${API_BASE_URL}v1/settings`;
-      console.log('📡 [AccountSettingsScreen] Fetching partner settings:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'GET',
       });
 
       const data = await response.json();
-      console.log('📥 [AccountSettingsScreen] Partner Settings Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         setSettings(data.data);
-        console.log('✅ [AccountSettingsScreen] Settings loaded successfully');
       } else {
         console.error('❌ [AccountSettingsScreen] Failed to fetch settings:', data.message);
         showToast(data.message || 'Failed to load settings', 'error');

@@ -58,25 +58,14 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       if (partnerId) {
         endpoint += `?partnerId=${encodeURIComponent(partnerId)}`;
       }
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
-      console.log('📤 [RestaurantDetailsScreen] FETCHING FORM SECTIONS FROM API');
-      console.log('📤 [RestaurantDetailsScreen] Partner ID:', partnerId);
-      console.log('📤 [RestaurantDetailsScreen] Endpoint:', endpoint);
-      console.log('📤 [RestaurantDetailsScreen] Method: GET');
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
       
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [RestaurantDetailsScreen] Request Headers:', JSON.stringify(headers, null, 2));
       
       const response = await fetchWithAuth(endpoint, {
         method: 'GET',
         headers: headers,
       }, true);
 
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
-      console.log('📥 [RestaurantDetailsScreen] API RESPONSE RECEIVED');
-      console.log('📥 [RestaurantDetailsScreen] Response Status:', response.status);
-      console.log('📥 [RestaurantDetailsScreen] Response OK:', response.ok);
       
       let data;
       try {
@@ -88,8 +77,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         throw new Error('Invalid response format from API');
       }
       
-      console.log('📥 [RestaurantDetailsScreen] Response Data:', JSON.stringify(data, null, 2));
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
 
       // Handle 500 errors (server errors)
       if (response.status === 500) {
@@ -109,8 +96,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       }
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log('✅ [RestaurantDetailsScreen] API Call Successful');
-        console.log('✅ [RestaurantDetailsScreen] Total Sections:', data.data?.sections?.length || 0);
         
         // Find RESTAURANT_DETAILS section or use first section
         const restaurantSection = data.data?.sections?.find(
@@ -118,10 +103,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         ) || data.data?.sections?.[0];
 
         if (restaurantSection) {
-          console.log('✅ [RestaurantDetailsScreen] Section Found:', restaurantSection.section_id);
-          console.log('✅ [RestaurantDetailsScreen] Section Title:', restaurantSection.title);
-          console.log('✅ [RestaurantDetailsScreen] Total Fields:', restaurantSection.fields?.length || 0);
-          console.log('✅ [RestaurantDetailsScreen] Fields:', restaurantSection.fields?.map(f => `${f.key} (${f.type})`).join(', ') || 'None');
           
           setSectionData(restaurantSection);
           
@@ -136,26 +117,22 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
               } else {
                 initialFormData[field.key] = field.value;
               }
-              console.log(`✅ [RestaurantDetailsScreen] Field "${field.key}" initialized with saved value from backend: ${field.value}`);
             } else {
               // No saved value, use defaults
               if (field.type === 'toggle') {
                 // Use backend default value, fallback to false if not provided
                 initialFormData[field.key] = field.default !== undefined ? field.default : false;
-                console.log(`✅ [RestaurantDetailsScreen] Toggle field "${field.key}" initialized with default value: ${initialFormData[field.key]} (from backend: ${field.default})`);
               } else {
                 initialFormData[field.key] = '';
               }
             }
           });
-          console.log('✅ [RestaurantDetailsScreen] Initialized Form Data:', JSON.stringify(initialFormData, null, 2));
           setFormData(initialFormData);
 
           // Fetch initial dropdown options (states)
           const dropdownFields = restaurantSection.fields?.filter(
             field => field.type === 'dropdown' && field.options_source && !field.options_source.includes('{')
           ) || [];
-          console.log('📤 [RestaurantDetailsScreen] Fetching initial dropdown options for:', dropdownFields.map(f => f.key).join(', '));
           
           dropdownFields.forEach(field => {
             fetchDropdownOptions(field.key, field.options_source);
@@ -167,7 +144,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
           if (stateField?.value && stateField?.options_source) {
             const cityField = restaurantSection.fields?.find(f => f.key === 'city');
             if (cityField?.options_source) {
-              console.log(`📤 [RestaurantDetailsScreen] State has saved value "${stateField.value}", fetching cities...`);
               fetchDropdownOptions('city', cityField.options_source, { state: stateField.value });
             }
           }
@@ -177,7 +153,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
           if (cityField?.value && cityField?.options_source) {
             const areaField = restaurantSection.fields?.find(f => f.key === 'area');
             if (areaField?.options_source) {
-              console.log(`📤 [RestaurantDetailsScreen] City has saved value "${cityField.value}", fetching areas...`);
               fetchDropdownOptions('area', areaField.options_source, { city: cityField.value });
             }
           }
@@ -205,7 +180,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       showToast('Network error. Please check your connection.', 'error');
     } finally {
       setLoading(false);
-      console.log('🏁 [RestaurantDetailsScreen] Sections fetch completed, loading set to false');
     }
   };
 
@@ -226,7 +200,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       if (url.startsWith('http')) {
         // Already a full URL
         fullUrl = url;
-        console.log(`🔗 [RestaurantDetailsScreen] URL is already full URL: ${fullUrl}`);
       } else {
         // Remove leading slash if present
         const originalUrl = url;
@@ -237,21 +210,14 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
           const baseUrlObj = new URL(API_BASE_URL);
           const basePath = baseUrlObj.pathname.replace(/^\/|\/$/g, ''); // Remove leading/trailing slashes
           
-          console.log(`🔗 [RestaurantDetailsScreen] URL Construction Details:`);
-          console.log(`🔗 [RestaurantDetailsScreen] - Original URL: ${originalUrl}`);
-          console.log(`🔗 [RestaurantDetailsScreen] - Processed URL: ${url}`);
-          console.log(`🔗 [RestaurantDetailsScreen] - Base Path from API_BASE_URL: ${basePath}`);
-          console.log(`🔗 [RestaurantDetailsScreen] - URL starts with basePath: ${url.startsWith(basePath)}`);
           
           // Check if the URL already starts with the base path
           if (basePath && url.startsWith(basePath)) {
             // URL already contains base path, just prepend the domain and protocol
             fullUrl = `${baseUrlObj.protocol}//${baseUrlObj.host}/${url}`;
-            console.log(`🔗 [RestaurantDetailsScreen] - Detected duplicate path, using domain only`);
           } else {
             // Normal case: prepend base URL (which already ends with /)
             fullUrl = `${API_BASE_URL.replace(/\/$/, '')}/${url}`;
-            console.log(`🔗 [RestaurantDetailsScreen] - Normal path, prepending base URL`);
           }
         } catch (urlError) {
           // Fallback if URL constructor fails (shouldn't happen in React Native)
@@ -262,18 +228,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       
       const requestHeaders = await getApiHeaders(true); // Include authorization
       
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
-      console.log(`📤 [RestaurantDetailsScreen] FETCHING DROPDOWN OPTIONS FOR: ${fieldKey}`);
-      console.log(`📤 [RestaurantDetailsScreen] Field Key: ${fieldKey}`);
-      console.log(`📤 [RestaurantDetailsScreen] Original Source: ${optionsSource}`);
-      console.log(`📤 [RestaurantDetailsScreen] Parameters:`, JSON.stringify(params, null, 2));
-      console.log(`📤 [RestaurantDetailsScreen] Parameters Count: ${Object.keys(params).length}`);
-      console.log(`📤 [RestaurantDetailsScreen] Base URL: ${API_BASE_URL}`);
-      console.log(`📤 [RestaurantDetailsScreen] Processed URL: ${url}`);
-      console.log(`📤 [RestaurantDetailsScreen] Final URL: ${fullUrl}`);
-      console.log(`📤 [RestaurantDetailsScreen] Method: GET`);
-      console.log(`📤 [RestaurantDetailsScreen] Request Headers:`, JSON.stringify(requestHeaders, null, 2));
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
       
       const response = await fetchWithAuth(fullUrl, {
         method: 'GET',
@@ -286,21 +240,11 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         responseHeaders[key] = value;
       });
       
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
-      console.log(`📥 [RestaurantDetailsScreen] OPTIONS API RESPONSE FOR: ${fieldKey}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response Status: ${response.status}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response Status Text: ${response.statusText}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response OK: ${response.ok}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response Type: ${response.type}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response Headers:`, JSON.stringify(responseHeaders, null, 2));
-      console.log(`📥 [RestaurantDetailsScreen] Response URL: ${response.url}`);
       
       let data;
       let rawResponseText = null;
       try {
         rawResponseText = await response.text();
-        console.log(`📥 [RestaurantDetailsScreen] Raw Response Text Length: ${rawResponseText.length} characters`);
-        console.log(`📥 [RestaurantDetailsScreen] Raw Response Text (first 500 chars):`, rawResponseText.substring(0, 500));
         
         try {
           data = JSON.parse(rawResponseText);
@@ -316,41 +260,17 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         throw new Error(`Failed to read response from ${fieldKey} API`);
       }
       
-      console.log(`📥 [RestaurantDetailsScreen] Parsed Response Data Type:`, typeof data);
-      console.log(`📥 [RestaurantDetailsScreen] Parsed Response Data:`, JSON.stringify(data, null, 2));
-      console.log(`📥 [RestaurantDetailsScreen] Response Data Keys:`, data ? Object.keys(data) : 'null/undefined');
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         // Detailed data structure analysis
-        console.log('🔍 [RestaurantDetailsScreen] ========================================');
-        console.log(`🔍 [RestaurantDetailsScreen] ANALYZING RESPONSE DATA STRUCTURE FOR: ${fieldKey}`);
-        console.log(`🔍 [RestaurantDetailsScreen] Data object exists: ${data !== null && data !== undefined}`);
-        console.log(`🔍 [RestaurantDetailsScreen] Data.code: ${data.code} (expected: 200)`);
-        console.log(`🔍 [RestaurantDetailsScreen] Data.status: ${data.status} (expected: 'success')`);
-        console.log(`🔍 [RestaurantDetailsScreen] Data.data exists: ${data.data !== null && data.data !== undefined}`);
         
         if (data.data) {
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data type: ${typeof data.data}`);
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data keys:`, Object.keys(data.data));
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data.states exists: ${data.data.states !== undefined}`);
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data.cities exists: ${data.data.cities !== undefined}`);
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data.areas exists: ${data.data.areas !== undefined}`);
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data.states type: ${Array.isArray(data.data.states) ? 'array' : typeof data.data.states}`);
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data.states length: ${Array.isArray(data.data.states) ? data.data.states.length : 'N/A'}`);
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data.cities length: ${Array.isArray(data.data.cities) ? data.data.cities.length : 'N/A'}`);
-          console.log(`🔍 [RestaurantDetailsScreen] Data.data.areas length: ${Array.isArray(data.data.areas) ? data.data.areas.length : 'N/A'}`);
         } else {
           console.warn(`⚠️ [RestaurantDetailsScreen] Data.data is missing or null`);
         }
-        console.log('🔍 [RestaurantDetailsScreen] ========================================');
         
         // Handle different response formats
         const options = data.data?.states || data.data?.cities || data.data?.areas || data.data || [];
-        console.log(`✅ [RestaurantDetailsScreen] Options loaded successfully for ${fieldKey}`);
-        console.log(`✅ [RestaurantDetailsScreen] Options source: ${data.data?.states ? 'states' : data.data?.cities ? 'cities' : data.data?.areas ? 'areas' : 'data' || 'empty array'}`);
-        console.log(`✅ [RestaurantDetailsScreen] Total Options: ${options.length}`);
-        console.log(`✅ [RestaurantDetailsScreen] Options is array: ${Array.isArray(options)}`);
         
         if (options.length > 0) {
           // Better preview logging that handles different object formats
@@ -358,11 +278,7 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
             if (typeof o === 'string') return o;
             return o?.name || o?.label || o?.value || o?.id || JSON.stringify(o);
           }).join(', ');
-          console.log(`✅ [RestaurantDetailsScreen] Options Preview:`, preview);
-          console.log(`✅ [RestaurantDetailsScreen] First Option Type: ${typeof options[0]}`);
-          console.log(`✅ [RestaurantDetailsScreen] First Option Sample:`, JSON.stringify(options[0], null, 2));
           if (typeof options[0] === 'object' && options[0] !== null) {
-            console.log(`✅ [RestaurantDetailsScreen] First Option Keys:`, Object.keys(options[0]));
           }
         } else {
           console.warn(`⚠️ [RestaurantDetailsScreen] Options array is empty - no options to display`);
@@ -438,13 +354,11 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       showToast(`Failed to load ${fieldKey} options`, 'error');
     } finally {
       setLoadingOptions(prev => ({ ...prev, [fieldKey]: false }));
-      console.log(`🏁 [RestaurantDetailsScreen] Options fetch completed for ${fieldKey}, loading set to false`);
     }
   };
 
   // Handle field value change
   const handleFieldChange = (fieldKey, value) => {
-    console.log('🔄 [RestaurantDetailsScreen] Field value changed:', fieldKey, '=', value);
     
     // Clear error for this field when user starts typing/selecting
     if (fieldErrors[fieldKey]) {
@@ -479,7 +393,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       
       // Handle dependent dropdowns
       if (fieldKey === 'state' && value) {
-        console.log('🔄 [RestaurantDetailsScreen] State selected, resetting city and area');
         // Reset city and area when state changes
         newData.city = '';
         newData.area = '';
@@ -488,11 +401,9 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         // Fetch cities for selected state
         const cityField = sectionData?.fields?.find(f => f.key === 'city');
         if (cityField?.options_source) {
-          console.log('📤 [RestaurantDetailsScreen] Fetching cities for state:', value);
           fetchDropdownOptions('city', cityField.options_source, { state: value });
         }
       } else if (fieldKey === 'city' && value) {
-        console.log('🔄 [RestaurantDetailsScreen] City selected, resetting area');
         // Reset area when city changes
         newData.area = '';
         setFieldOptions(prev => ({ ...prev, area: [] }));
@@ -500,12 +411,10 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         // Fetch areas for selected city
         const areaField = sectionData?.fields?.find(f => f.key === 'area');
         if (areaField?.options_source) {
-          console.log('📤 [RestaurantDetailsScreen] Fetching areas for city:', value);
           fetchDropdownOptions('area', areaField.options_source, { city: value });
         }
       }
       
-      console.log('✅ [RestaurantDetailsScreen] Updated form data:', JSON.stringify(newData, null, 2));
       return newData;
     });
   };
@@ -528,15 +437,8 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         channel: 'whatsapp',
       };
       
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
-      console.log(`📤 [RestaurantDetailsScreen] GENERATING OTP FOR: ${fieldKey}`);
-      console.log(`📤 [RestaurantDetailsScreen] Endpoint: ${endpoint}`);
-      console.log(`📤 [RestaurantDetailsScreen] Method: POST`);
-      console.log(`📤 [RestaurantDetailsScreen] Request Body:`, JSON.stringify(requestBody, null, 2));
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
       
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [RestaurantDetailsScreen] Request Headers:', JSON.stringify(headers, null, 2));
       
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -544,19 +446,10 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         body: JSON.stringify(requestBody),
       }, true);
 
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
-      console.log(`📥 [RestaurantDetailsScreen] OTP GENERATION RESPONSE FOR: ${fieldKey}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response Status: ${response.status}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response OK: ${response.ok}`);
       
       const data = await response.json();
-      console.log(`📥 [RestaurantDetailsScreen] Response Data:`, JSON.stringify(data, null, 2));
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log(`✅ [RestaurantDetailsScreen] OTP generated successfully for ${fieldKey}`);
-        console.log(`✅ [RestaurantDetailsScreen] OTP ID: ${data.data?.otp_id}`);
-        console.log(`✅ [RestaurantDetailsScreen] Expires In: ${data.data?.expires_in} seconds`);
         
         setOtpData(prev => ({
           ...prev,
@@ -610,15 +503,8 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         otp: otpCode,
       };
       
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
-      console.log(`📤 [RestaurantDetailsScreen] VERIFYING OTP FOR: ${fieldKey}`);
-      console.log(`📤 [RestaurantDetailsScreen] Endpoint: ${endpoint}`);
-      console.log(`📤 [RestaurantDetailsScreen] Method: POST`);
-      console.log(`📤 [RestaurantDetailsScreen] Request Body:`, JSON.stringify(requestBody, null, 2));
-      console.log('📤 [RestaurantDetailsScreen] ========================================');
       
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [RestaurantDetailsScreen] Request Headers:', JSON.stringify(headers, null, 2));
       
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -626,10 +512,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         body: JSON.stringify(requestBody),
       }, true);
 
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
-      console.log(`📥 [RestaurantDetailsScreen] OTP VERIFICATION RESPONSE FOR: ${fieldKey}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response Status: ${response.status}`);
-      console.log(`📥 [RestaurantDetailsScreen] Response OK: ${response.ok}`);
       
       let data;
       try {
@@ -642,11 +524,8 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         throw new Error(`Invalid response format from OTP verification API`);
       }
       
-      console.log(`📥 [RestaurantDetailsScreen] Response Data:`, JSON.stringify(data, null, 2));
-      console.log('📥 [RestaurantDetailsScreen] ========================================');
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log(`✅ [RestaurantDetailsScreen] OTP verified successfully for ${fieldKey}`);
         // Use backend message if available, otherwise fallback
         const otpVerifiedMessage = sectionData?.messages?.otp?.verified || 'OTP verified successfully';
         showToast(otpVerifiedMessage, 'success');
@@ -754,7 +633,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
                   // API returns objects with id and name (e.g., {id: "DL", name: "Delhi"})
                   // Store the id for dependent dropdowns and API submission
                   value = item.id;
-                  console.log(`✅ [RestaurantDetailsScreen] Selected ${field.key}:`, item.id, '(', item.name, ')');
                 } else {
                   // Fallback to other formats
                   value = item?.label || item?.value || item?.name || '';
@@ -873,14 +751,12 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         // field.label: Label text from backend
         // field.default: Default value from backend (true/false)
         // field.required: Required flag from backend
-        console.log(`🔄 [RestaurantDetailsScreen] Rendering toggle field: ${field.key}, label: "${field.label}", value: ${fieldValue}, default: ${field.default}, required: ${isRequired}`);
         return (
           <View key={field.key} style={styles.fieldContainer}>
             <View style={styles.toggleRow}>
               <CustomToggle
                 value={fieldValue}
                 onValueChange={(value) => {
-                  console.log(`🔄 [RestaurantDetailsScreen] Toggle "${field.key}" changed to: ${value}`);
                   handleFieldChange(field.key, value);
                 }}
               />
@@ -897,10 +773,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
   };
 
   const handleProceed = async () => {
-    console.log('📤 [RestaurantDetailsScreen] ========================================');
-    console.log('📤 [RestaurantDetailsScreen] FORM SUBMISSION INITIATED');
-    console.log('📤 [RestaurantDetailsScreen] Current Form Data:', JSON.stringify(formData, null, 2));
-    console.log('📤 [RestaurantDetailsScreen] OTP Data:', JSON.stringify(otpData, null, 2));
     
     // Validate all required fields
     const missingFields = sectionData?.fields?.filter(field => {
@@ -958,12 +830,8 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         ...submissionData,
       };
 
-      console.log('📤 [RestaurantDetailsScreen] Submitting to API');
-      console.log('📤 [RestaurantDetailsScreen] Endpoint:', endpoint);
-      console.log('📤 [RestaurantDetailsScreen] Request Body:', JSON.stringify(requestBody, null, 2));
 
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [RestaurantDetailsScreen] Request Headers:', JSON.stringify(headers, null, 2));
 
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -972,10 +840,8 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       }, true);
 
       const data = await response.json();
-      console.log('📥 [RestaurantDetailsScreen] API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log('✅ [RestaurantDetailsScreen] Form submitted successfully');
         const successMessage = sectionData?.messages?.success?.form_submitted || data.message || 'Restaurant details submitted successfully';
         showToast(successMessage, 'success');
         

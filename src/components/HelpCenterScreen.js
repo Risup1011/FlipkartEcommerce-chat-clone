@@ -47,23 +47,14 @@ const HelpCenterScreen = ({ onBack, screenTitle = 'Help Center', route }) => {
       // Build full API URL
       const url = `${API_BASE_URL}v1${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
       
-      console.log('📡 [HelpCenterScreen] ========================================');
-      console.log('📡 [HelpCenterScreen] FETCHING HELP DATA');
-      console.log('📡 [HelpCenterScreen] ========================================');
-      console.log('📡 [HelpCenterScreen] Route:', route);
-      console.log('📡 [HelpCenterScreen] Endpoint:', endpoint);
-      console.log('📡 [HelpCenterScreen] URL:', url);
       
       const response = await fetchWithAuth(url, {
         method: 'GET',
       });
 
       const data = await response.json();
-      console.log('📥 [HelpCenterScreen] Help API Response Status:', response.status);
-      console.log('📥 [HelpCenterScreen] Help API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log('✅ [HelpCenterScreen] Help data loaded successfully');
         
         // Handle different response structures
         if (data.data?.faqs && Array.isArray(data.data.faqs)) {
@@ -101,7 +92,6 @@ const HelpCenterScreen = ({ onBack, screenTitle = 'Help Center', route }) => {
       ]);
     } finally {
       setIsLoading(false);
-      console.log('📡 [HelpCenterScreen] Help data loading completed');
     }
   };
 

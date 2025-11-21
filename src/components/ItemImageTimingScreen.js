@@ -10,6 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { Poppins, icons } from '../assets';
@@ -25,24 +27,27 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
   const [screenData, setScreenData] = useState(null); // Store backend screen configuration
   const [loadingScreenData, setLoadingScreenData] = useState(true); // Loading state for screen config
   const [uploadedImages, setUploadedImages] = useState([]);
-  const [selectedTimingOption, setSelectedTimingOption] = useState(0); // 0: all times, 1: same time all days, 2: different times
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
+  const [previewImage, setPreviewImage] = useState(null); // For image preview modal
+  const [loadingExistingImages, setLoadingExistingImages] = useState(false); // Loading state for existing images
 
   // Fetch screen configuration from backend
   useEffect(() => {
     fetchScreenConfig();
   }, []);
 
+  // Fetch existing item images after screen config is loaded
+  useEffect(() => {
+    if (!loadingScreenData && itemId) {
+      fetchExistingImages();
+    }
+  }, [loadingScreenData, itemId]);
+
   const fetchScreenConfig = async () => {
     try {
       setLoadingScreenData(true);
       const endpoint = `${API_BASE_URL}v1/onboarding/sections`;
-      console.log('📤 [ItemImageTimingScreen] ========================================');
-      console.log('📤 [ItemImageTimingScreen] FETCHING SCREEN CONFIG FROM API');
-      console.log('📤 [ItemImageTimingScreen] Endpoint:', endpoint);
-      console.log('📤 [ItemImageTimingScreen] Method: GET');
-      console.log('📤 [ItemImageTimingScreen] ========================================');
       
       const headers = await getApiHeaders(true);
       const response = await fetchWithAuth(endpoint, {
@@ -50,10 +55,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         headers: headers,
       }, true);
 
-      console.log('📥 [ItemImageTimingScreen] ========================================');
-      console.log('📥 [ItemImageTimingScreen] API RESPONSE RECEIVED');
-      console.log('📥 [ItemImageTimingScreen] Response Status:', response.status);
-      console.log('📥 [ItemImageTimingScreen] Response OK:', response.ok);
       
       let data;
       try {
@@ -67,12 +68,8 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         return;
       }
       
-      console.log('📥 [ItemImageTimingScreen] Response Data:', JSON.stringify(data, null, 2));
-      console.log('📥 [ItemImageTimingScreen] ========================================');
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log('✅ [ItemImageTimingScreen] API Call Successful');
-        console.log('✅ [ItemImageTimingScreen] Total Sections:', data.data?.sections?.length || 0);
         
         // Find ITEM_IMAGE_TIMING section
         const imageTimingSection = data.data?.sections?.find(
@@ -80,8 +77,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         );
 
         if (imageTimingSection) {
-          console.log('✅ [ItemImageTimingScreen] Section Found:', imageTimingSection.section_id);
-          console.log('✅ [ItemImageTimingScreen] Screen Config:', JSON.stringify(imageTimingSection, null, 2));
           setScreenData(imageTimingSection);
         } else {
           console.warn('⚠️ [ItemImageTimingScreen] ITEM_IMAGE_TIMING section not found, using fallback');
@@ -99,7 +94,73 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
       setScreenData(null);
     } finally {
       setLoadingScreenData(false);
-      console.log('🏁 [ItemImageTimingScreen] Screen config fetch completed');
+    }
+  };
+
+  // Fetch existing images for the item from backend
+  const fetchExistingImages = async () => {
+    if (!itemId) {
+      console.warn('⚠️ [ItemImageTimingScreen] No itemId provided, skipping image fetch');
+      return;
+    }
+
+    try {
+      setLoadingExistingImages(true);
+      const endpoint = `${API_BASE_URL}v1/catalog/items/${itemId}`;
+      
+      const response = await fetchWithAuth(endpoint, {
+        method: 'GET',
+      });
+
+      
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error('❌ [ItemImageTimingScreen] Failed to parse response as JSON');
+        const textResponse = await response.text();
+        console.error('❌ [ItemImageTimingScreen] Raw Response:', textResponse);
+        setLoadingExistingImages(false);
+        return;
+      }
+      
+
+      if (response.ok && data.code === 200 && data.status === 'success') {
+        const itemData = data.data || {};
+        const imageUrls = itemData.image_urls || [];
+        
+        
+        // Map image URLs to uploadedImages format
+        // Existing images from backend have URL, new images from device have URI
+        const existingImages = imageUrls.map((imageUrl, index) => {
+          // Extract filename from URL or generate one
+          const urlParts = imageUrl.split('/');
+          const fileName = urlParts[urlParts.length - 1] || `image_${index + 1}.jpg`;
+          
+          return {
+            id: `existing_${index}_${Date.now()}`, // Unique ID for existing images
+            uri: imageUrl, // Use URL as URI for display
+            originalUri: imageUrl, // Store original URL
+            fileName: fileName,
+            fileSize: 0, // Unknown for existing images
+            type: 'image/jpeg', // Default type
+            isExisting: true, // Flag to identify existing images from backend
+            imageUrl: imageUrl, // Store the original URL for deletion if needed
+          };
+        });
+        
+        setUploadedImages(existingImages);
+      } else {
+        console.warn('⚠️ [ItemImageTimingScreen] Failed to fetch item details - no existing images will be shown');
+        console.warn('⚠️ [ItemImageTimingScreen] Error:', data.message || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('❌ [ItemImageTimingScreen] ========================================');
+      console.error('❌ [ItemImageTimingScreen] ERROR FETCHING EXISTING IMAGES');
+      console.error('❌ [ItemImageTimingScreen] Error:', error);
+      console.error('❌ [ItemImageTimingScreen] ========================================');
+    } finally {
+      setLoadingExistingImages(false);
     }
   };
 
@@ -107,9 +168,8 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
     try {
       const options = {
         mediaType: 'photo',
-        quality: 0.8,
-        maxWidth: 133,
-        maxHeight: 133,
+        quality: 1.0, // Maximum quality
+        // Remove maxWidth and maxHeight to get full resolution images
         selectionLimit: 10, // Allow multiple images
         includeBase64: false,
       };
@@ -131,6 +191,7 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         const newImages = result.assets.map((asset) => ({
           id: Date.now() + Math.random(),
           uri: asset.uri,
+          originalUri: asset.originalUri || asset.uri, // Store original full-resolution URI
           fileName: asset.fileName || `image_${Date.now()}.jpg`,
           fileSize: asset.fileSize || 0,
           type: asset.type || 'image/jpeg',
@@ -163,12 +224,16 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
     }
   };
 
-  const handleRemoveImage = (imageId) => {
+  const handleRemoveImage = async (imageId) => {
     const removeTitle = screenData?.messages?.remove_image?.title || 'Remove Image';
     const removeMessage = screenData?.messages?.remove_image?.message || 'Are you sure you want to remove this image?';
     const cancelText = screenData?.messages?.remove_image?.cancel || 'Cancel';
     const removeText = screenData?.messages?.remove_image?.confirm || 'Remove';
     const removedMsg = screenData?.messages?.success?.image_removed || 'Image removed';
+    
+    // Find the image to check if it's an existing image from backend
+    const imageToRemove = uploadedImages.find(img => img.id === imageId);
+    const isExistingImage = imageToRemove?.isExisting;
     
     Alert.alert(
       removeTitle,
@@ -178,7 +243,15 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         {
           text: removeText,
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
+            // For existing images, we might want to call a delete API endpoint
+            // For now, we'll just remove it from the state
+            // When the user submits, only remaining images will be kept
+            if (isExistingImage && imageToRemove?.imageUrl && itemId) {
+              // TODO: If backend has a delete image endpoint, call it here
+              // For now, we'll just remove from state
+            }
+            
             setUploadedImages((prev) => prev.filter((img) => img.id !== imageId));
             showToast(removedMsg, 'success');
           },
@@ -187,10 +260,12 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
     );
   };
 
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '0 B';
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
+  const handlePreviewImage = (image) => {
+    setPreviewImage(image);
+  };
+
+  const closePreview = () => {
+    setPreviewImage(null);
   };
 
   const handleDelete = () => {
@@ -246,8 +321,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
       formData.append('file', fileObject);
 
       const endpoint = `${API_BASE_URL}v1/catalog/items/${itemId}/images`;
-      console.log('📤 [ItemImageTimingScreen] Uploading image:', fileName);
-      console.log('📤 [ItemImageTimingScreen] Endpoint:', endpoint);
 
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -255,7 +328,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
       }, true);
 
       const data = await response.json();
-      console.log('📥 [ItemImageTimingScreen] Upload response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         return data.data; // Return the updated item data
@@ -292,24 +364,47 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
     try {
       let lastItemData = null;
       let successCount = 0;
+      let newImagesCount = 0;
 
-      // Upload each image sequentially
-      for (let i = 0; i < uploadedImages.length; i++) {
-        const image = uploadedImages[i];
-        setUploadProgress({ current: i + 1, total: uploadedImages.length });
+      // Separate existing images from new images
+      const existingImages = uploadedImages.filter(img => img.isExisting);
+      const newImages = uploadedImages.filter(img => !img.isExisting);
+
+
+      // Only upload new images (not existing ones from backend)
+      for (let i = 0; i < newImages.length; i++) {
+        const image = newImages[i];
+        setUploadProgress({ current: i + 1, total: newImages.length });
         
         const itemData = await uploadImage(image);
         
         if (itemData) {
           lastItemData = itemData;
           successCount++;
+          newImagesCount++;
         } else {
           // If one upload fails, continue with others but show warning
           console.warn(`⚠️ [ItemImageTimingScreen] Failed to upload image ${i + 1}`);
         }
       }
 
-      if (successCount === 0) {
+      // If there are only existing images and no new uploads, fetch the latest item data
+      if (newImages.length === 0 && existingImages.length > 0) {
+        const endpoint = `${API_BASE_URL}v1/catalog/items/${itemId}`;
+        const response = await fetchWithAuth(endpoint, {
+          method: 'GET',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.code === 200 && data.status === 'success') {
+            lastItemData = data.data;
+            successCount = existingImages.length; // All existing images are "successful"
+          }
+        }
+      }
+
+      if (successCount === 0 && newImages.length > 0) {
         const errorMsg = screenData?.messages?.error?.upload_failed || 'Failed to upload images. Please try again.';
         showToast(errorMsg, 'error');
         setUploading(false);
@@ -319,23 +414,10 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
       // Use the final itemData which contains all image URLs (including newly uploaded ones)
       const finalImageUrls = lastItemData?.image_urls || [];
 
-      // Get timing options from screen data or use fallback
-      const timingOptions = screenData?.timing_options || [
-        'Item is available at all times when kitchen / restaurant is open on kamai',
-        'Item is available at same time for all days of the week',
-        'Item is available at different times during different days of the weeks',
-      ];
-
-      const timingData = {
-        option: selectedTimingOption,
-        optionText: timingOptions[selectedTimingOption] || timingOptions[0],
-      };
-
       const submitData = {
         itemId,
         imageUrls: finalImageUrls, // Use final response which has all images
         itemData: lastItemData,
-        timing: timingData,
       };
 
       if (onSave) {
@@ -355,21 +437,9 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
     }
   };
 
-  const RadioButton = ({ selected, onPress, label }) => (
-    <TouchableOpacity
-      style={styles.radioButtonContainer}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.radioButton}>
-        {selected && <View style={styles.radioButtonInner} />}
-      </View>
-      <Text style={styles.radioButtonLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
 
-  // Show loading state while fetching screen config
-  if (loadingScreenData) {
+  // Show loading state while fetching screen config or existing images
+  if (loadingScreenData || loadingExistingImages) {
     return (
       <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
         <CustomHeader 
@@ -379,7 +449,9 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FF6E1A" />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={styles.loadingText}>
+            {loadingScreenData ? 'Loading...' : 'Loading images...'}
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -394,10 +466,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
   const guidelineNote = screenData?.image_config?.quality_note || 'Quality should be same as you serve for dine-in customers.';
   const uploadButtonText = screenData?.image_section?.upload_button_text || 'BROWSE FILES TO UPLOAD';
   const uploadSubtext = `[Max: ${maxSizeMB}MB] (${formats.join('/')})`;
-  
-  const timingSectionTitle = screenData?.timing_section?.title || "Item Timing";
-  const timingInstruction = screenData?.timing_section?.instruction || 'Please specify the timing when this item will be available on kamai';
-  const timingWarning = screenData?.timing_section?.warning || 'Each day can have only maximum of 3 timeslots.';
   
   const deleteButtonText = screenData?.buttons?.delete || 'Delete';
   const submitButtonText = screenData?.buttons?.submit || 'SUBMIT';
@@ -457,13 +525,17 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
                     <Text style={styles.imageFileName} numberOfLines={1}>
                       {image.fileName}
                     </Text>
-                    <Text style={styles.imageFileSize}>
-                      {formatFileSize(image.fileSize)}
-                    </Text>
                   </View>
                   <View style={styles.checkmarkContainer}>
                     <Text style={styles.checkmark}>✓</Text>
                   </View>
+                  <TouchableOpacity
+                    style={styles.previewButton}
+                    onPress={() => handlePreviewImage(image)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.previewButtonText}>Preview</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => handleRemoveImage(image.id)}
@@ -475,38 +547,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
               ))}
             </View>
           )}
-        </View>
-
-        {/* Item Timing Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{timingSectionTitle}</Text>
-          <Text style={styles.timingInstruction}>
-            {timingInstruction}
-          </Text>
-
-          {/* Warning */}
-          <View style={styles.warningContainer}>
-            <Text style={styles.warningIcon}>⚠️</Text>
-            <Text style={styles.warningText}>
-              {timingWarning}
-            </Text>
-          </View>
-
-          {/* Radio Button Options */}
-          <View style={styles.radioOptions}>
-            {(screenData?.timing_options || [
-              'Item is available at all times when kitchen / restaurant is open on kamai',
-              'Item is available at same time for all days of the week',
-              'Item is available at different times during different days of the weeks',
-            ]).map((option, index) => (
-              <RadioButton
-                key={index}
-                selected={selectedTimingOption === index}
-                onPress={() => setSelectedTimingOption(index)}
-                label={option}
-              />
-            ))}
-          </View>
         </View>
       </ScrollView>
 
@@ -531,6 +571,38 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
           loading={uploading}
         />
       </View>
+
+      {/* Image Preview Modal */}
+      <Modal
+        visible={previewImage !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closePreview}
+      >
+        <SafeAreaView style={styles.previewModalContainer}>
+          {/* Header with Close Button */}
+          <View style={styles.previewHeader}>
+            <TouchableOpacity
+              style={styles.previewCloseButton}
+              onPress={closePreview}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.previewCloseButtonText}>×</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Image Frame Container */}
+          <View style={styles.previewImageFrame}>
+            {previewImage && (
+              <Image
+                source={{ uri: previewImage.originalUri || previewImage.uri }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -599,6 +671,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginHorizontal: '1.5%',
     position: 'relative',
+    minHeight: 120,
   },
   imageThumbnail: {
     width: '100%',
@@ -607,18 +680,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   imageInfo: {
-    marginBottom: 4,
+    marginBottom: 30,
+    minHeight: 14,
   },
   imageFileName: {
     fontFamily: Poppins.regular,
     fontSize: 10,
     color: '#000000',
     marginBottom: 2,
-  },
-  imageFileSize: {
-    fontFamily: Poppins.regular,
-    fontSize: 9,
-    color: '#666666',
   },
   checkmarkContainer: {
     position: 'absolute',
@@ -635,6 +704,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  previewButton: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    right: 2,
+    backgroundColor: '#FF6E1A',
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewButtonText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontFamily: Poppins.medium,
   },
   removeButton: {
     position: 'absolute',
@@ -653,61 +739,55 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     lineHeight: 16,
   },
-  timingInstruction: {
-    fontFamily: Poppins.regular,
-    fontSize: 14,
-    color: '#666666',
-    marginBottom: 16,
-  },
-  warningContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 20,
-  },
-  warningIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  warningText: {
-    fontFamily: Poppins.regular,
-    fontSize: 12,
-    color: '#FF6E1A',
+  previewModalContainer: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
   },
-  radioOptions: {
-    gap: 16,
-  },
-  radioButtonContainer: {
+  previewHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 10 : 20,
+    paddingBottom: 10,
+    backgroundColor: 'transparent',
   },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#666666',
+  previewCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
   },
-  radioButtonInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF6E1A',
+  previewCloseButtonText: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: 'bold',
+    lineHeight: 32,
   },
-  radioButtonLabel: {
-    fontFamily: Poppins.regular,
-    fontSize: 14,
-    color: '#000000',
+  previewImageFrame: {
     flex: 1,
-    lineHeight: 20,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
   },
   footer: {
     flexDirection: 'row',

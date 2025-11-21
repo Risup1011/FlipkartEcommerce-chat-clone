@@ -263,7 +263,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
   };
 
   const handleProceed = () => {
-    console.log('handleProceed called');
     const errors = {};
     
     // Validate all required fields
@@ -306,13 +305,10 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
     // Clear all errors if validation passes
     setFieldErrors({});
 
-    console.log('All validations passed, calling onProceed');
     // Navigate to next screen
     if (onProceed) {
-      console.log('onProceed exists, calling it');
       onProceed();
     } else {
-      console.log('onProceed does not exist');
       showToast('GSTIN & PAN details submitted successfully', 'success');
     }
   };

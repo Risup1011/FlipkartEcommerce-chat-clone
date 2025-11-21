@@ -32,40 +32,26 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   const [isLoadingConfigData, setIsLoadingConfigData] = useState(true);
   const tabsScrollViewRef = useRef(null);
   const tabPositions = useRef({});
+  const [menuResetTrigger, setMenuResetTrigger] = useState(0); // Trigger to reset MenuScreen navigation
 
   // Update activeBottomTab when initialBottomTab prop changes
   useEffect(() => {
     if (initialBottomTab) {
-      console.log('📡 [OrdersScreen] ========================================');
-      console.log('📡 [OrdersScreen] INITIAL BOTTOM TAB RECEIVED');
-      console.log('📡 [OrdersScreen] ========================================');
-      console.log('📡 [OrdersScreen] Initial Bottom Tab:', initialBottomTab);
-      console.log('📡 [OrdersScreen] Current Bottom Tab:', activeBottomTab);
       
       setActiveBottomTab(initialBottomTab);
-      console.log('✅ [OrdersScreen] Active bottom tab set to:', initialBottomTab);
-      console.log('📡 [OrdersScreen] ========================================');
     }
   }, [initialBottomTab]);
 
   // Update activeTab when initialTab prop changes
   useEffect(() => {
     if (initialTab) {
-      console.log('📡 [OrdersScreen] ========================================');
-      console.log('📡 [OrdersScreen] INITIAL TAB RECEIVED');
-      console.log('📡 [OrdersScreen] ========================================');
-      console.log('📡 [OrdersScreen] Initial Tab:', initialTab);
-      console.log('📡 [OrdersScreen] Current Active Tab:', activeTab);
-      console.log('📡 [OrdersScreen] Current Bottom Tab:', activeBottomTab);
       
       // Reset bottom tab to 'orders' if we're coming from MoreScreen (unless initialBottomTab is set)
       if (activeBottomTab !== 'orders' && !initialBottomTab) {
-        console.log('📍 [OrdersScreen] Resetting bottom tab from', activeBottomTab, 'to orders');
         setActiveBottomTab('orders');
       }
       
       setActiveTab(initialTab);
-      console.log('✅ [OrdersScreen] Active tab set to:', initialTab);
       
       // Scroll to the selected tab after a delay to ensure layout is complete
       // Try multiple times with increasing delays in case layout isn't ready
@@ -77,9 +63,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
               x: scrollX,
               animated: true,
             });
-            console.log('✅ [OrdersScreen] Scrolled to tab:', initialTab, 'at position:', scrollX);
           } else {
-            console.log(`⚠️  [OrdersScreen] Tab position not available (attempt ${attempt})`);
             // Retry up to 3 times with increasing delays
             if (attempt < 3) {
               scrollToTab(attempt + 1);
@@ -89,7 +73,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       };
       
       scrollToTab();
-      console.log('📡 [OrdersScreen] ========================================');
     }
   }, [initialTab]);
 
@@ -102,7 +85,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       const isFirstLoad = previousOrdersLengthRef.current === 0 && newOrders.length > 0;
       
       if (isNewOrder || isFirstLoad) {
-        console.log('🆕 New orders detected, opening NewOrdersScreen automatically');
         setPendingOrders(newOrders);
         setShowNewOrdersModal(true);
         if (onNewOrderReceived) {
@@ -119,7 +101,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       setIsLoadingConfigData(true);
       try {
         const url = `${API_BASE_URL}v1/config`;
-        console.log('📡 Fetching config data from:', url);
         
         const response = await fetchWithAuth(url, {
           method: 'GET',
@@ -128,8 +109,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         const responseData = await response.json();
         
         if (response.ok && responseData?.data) {
-          console.log('✅ Config data loaded successfully');
-          console.log('📋 Full config data:', JSON.stringify(responseData.data, null, 2));
           setConfigData(responseData.data);
           // Sync online status from API if available
           if (responseData.data.partner_info?.online_status) {
@@ -155,30 +134,15 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
   // Log header data source whenever configData changes
   useEffect(() => {
-    console.log('📋 ========================================');
-    console.log('📋 HEADER DATA SOURCE CHECK');
-    console.log('📋 ========================================');
-    console.log('📋 configData exists:', !!configData);
-    console.log('📋 partner_info exists:', !!configData?.partner_info);
     
     if (configData?.partner_info) {
-      console.log('✅ USING BACKEND DATA for header');
-      console.log('📋 Backend partner_info:', JSON.stringify(configData.partner_info, null, 2));
       
       const businessName = configData.partner_info.business_name;
       const onlineStatus = configData.partner_info.online_status;
       const closingInfo = configData.partner_info.closing_info;
       
-      console.log('📋 Business Name:', businessName ? `✅ "${businessName}" - FROM BACKEND` : '⚠️  MISSING - Using fallback: "Restaurant Name"');
-      console.log('📋 Online Status:', onlineStatus ? `✅ "${onlineStatus}" - FROM BACKEND` : '⚠️  MISSING - Using fallback: "Online"');
-      console.log('📋 Closing Info:', closingInfo ? `✅ "${closingInfo}" - FROM BACKEND` : '⚠️  MISSING - Using fallback: "Closes at 12:00 am, Tomorrow"');
     } else {
-      console.log('⚠️  USING FRONTEND FALLBACK DATA for header');
-      console.log('📋 Business Name: "Restaurant Name" (FALLBACK)');
-      console.log('📋 Online Status: "Online" (FALLBACK)');
-      console.log('📋 Closing Info: "Closes at 12:00 am, Tomorrow" (FALLBACK)');
     }
-    console.log('📋 ========================================');
   }, [configData]);
 
   // Simulate receiving new orders (for testing - remove in production)
@@ -211,14 +175,9 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
   // Dynamically generate order tabs from config API
   const orderTabs = React.useMemo(() => {
-    console.log('📋 Generating order tabs...');
-    console.log('📋 configData exists:', !!configData);
-    console.log('📋 order_status_labels exists:', !!configData?.order_status_labels);
     
     if (configData?.order_status_labels) {
       const labels = configData.order_status_labels;
-      console.log('✅ USING BACKEND LABELS from API');
-      console.log('📋 Backend labels received:', JSON.stringify(labels, null, 2));
       
       // Map API keys to tab structure
       // API uses: preparing, ready, picked_up, past_order
@@ -234,9 +193,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       tabs.forEach(tab => {
         const backendValue = labels[tab.id === 'pickedUp' ? 'picked_up' : tab.id === 'pastOrders' ? 'past_order' : tab.id];
         if (backendValue) {
-          console.log(`  ✅ "${tab.label}" - FROM BACKEND`);
         } else {
-          console.log(`  ⚠️  "${tab.label}" - FALLBACK (backend value missing)`);
         }
       });
       
@@ -244,24 +201,34 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     }
     
     // Fallback to default values if config not loaded yet
-    console.log('⚠️  USING FRONTEND FALLBACK LABELS (backend data not available)');
     const fallbackTabs = [
       { id: 'preparing', label: 'Preparing' },
       { id: 'ready', label: 'Ready' },
       { id: 'pickedUp', label: 'Picked Up' },
       { id: 'pastOrders', label: 'Past Orders' },
     ];
-    console.log('📋 Frontend fallback labels:', fallbackTabs.map(t => t.label).join(', '));
     
     return fallbackTabs;
   }, [configData]);
 
-  const bottomTabs = [
-    { id: 'orders', label: 'Orders', icon: icons.orders },
-    { id: 'menu', label: 'Menu', icon: icons.menu },
-    { id: 'finance', label: 'Finance', icon: icons.finance },
-    { id: 'more', label: 'More', icon: icons.more },
-  ];
+  // Get bottom tabs from config or use defaults (same pattern as OutletTimingsScreen)
+  const bottomTabs = React.useMemo(() => {
+    if (configData?.bottom_navigation_tabs && Array.isArray(configData.bottom_navigation_tabs)) {
+      return configData.bottom_navigation_tabs.map(tab => ({
+        id: tab.id || tab.route?.replace('/', '') || '',
+        label: tab.label || tab.title || '',
+        icon: tab.icon ? icons[tab.icon] : icons.menu,
+        route: tab.route || '',
+      }));
+    }
+    // Default bottom tabs (fallback)
+    return [
+      { id: 'orders', label: 'Orders', icon: icons.orders },
+      { id: 'menu', label: 'Menu', icon: icons.menu },
+      { id: 'finance', label: 'Finance', icon: icons.finance },
+      { id: 'more', label: 'More', icon: icons.more },
+    ];
+  }, [configData]);
 
   const handleTabPress = (tabId) => {
     setActiveTab(tabId);
@@ -276,7 +243,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   };
 
   const handleAcceptOrder = (order) => {
-    console.log('Order accepted:', order);
     // Here you would make an API call to accept the order
     // For now, just update local state
     setPendingOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
@@ -285,7 +251,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   };
 
   const handleDenyOrder = (order) => {
-    console.log('Order denied:', order);
     // Here you would make an API call to deny the order
     // For now, just update local state
     setPendingOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
@@ -301,7 +266,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     setIsLoadingCatalog(true);
     try {
       const url = `${API_BASE_URL}v1/catalog/orchestrator/complete-catalog`;
-      console.log('🔍 Testing Catalog API:', url);
       
       const response = await fetchWithAuth(url, {
         method: 'GET',
@@ -309,8 +273,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       
       const responseData = await response.json();
       
-      console.log('📦 Catalog API Response Status:', response.status);
-      console.log('📦 Catalog API Response Data:', JSON.stringify(responseData, null, 2));
       
       if (response.ok) {
         showToast(
@@ -335,7 +297,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     setIsLoadingConfig(true);
     try {
       const url = `${API_BASE_URL}v1/config`;
-      console.log('🔍 Testing Config API:', url);
       
       const response = await fetchWithAuth(url, {
         method: 'GET',
@@ -343,8 +304,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       
       const responseData = await response.json();
       
-      console.log('📦 Config API Response Status:', response.status);
-      console.log('📦 Config API Response Data:', JSON.stringify(responseData, null, 2));
       
       if (response.ok && responseData?.data) {
         // Update config data if test is successful
@@ -436,6 +395,33 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     showToast(`${testOrders.length} new order(s) received!`, 'info');
   };
 
+  // Handle bottom tab press - reset MenuScreen navigation when menu tab is clicked
+  // Uses same pattern as OutletTimingsScreen for consistency
+  const handleBottomTabPress = (tabId) => {
+    
+    // Find the tab to get route if available (for backend dynamic routes)
+    const tab = bottomTabs.find(t => t.id === tabId);
+    
+    // If clicking a different tab, switch to it
+    if (tabId !== activeBottomTab) {
+      setActiveBottomTab(tabId);
+      
+      // If switching to menu tab, trigger reset to ensure we show main MenuScreen
+      if (tabId === 'menu') {
+        setMenuResetTrigger(prev => prev + 1);
+      }
+      
+      // Handle navigation using onNavigate if available (for external navigation)
+      if (onNavigate && tab?.route) {
+        onNavigate(tab.route);
+      }
+    } else if (tabId === 'menu') {
+      // Already on menu tab - clicking it again should reset navigation to main MenuScreen
+      // This handles cases where user is on ItemVariantsAndAddonsScreen, AddQuantityScreen, etc.
+      setMenuResetTrigger(prev => prev + 1);
+    }
+  };
+
   // Render MenuScreen when menu tab is active
   if (activeBottomTab === 'menu') {
     return (
@@ -444,6 +430,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
           <MenuScreen 
             partnerStatus={partnerStatus} 
             onNavigateToOrders={() => setActiveBottomTab('orders')}
+            resetNavigationTrigger={menuResetTrigger}
           />
         </View>
         {/* Bottom Navigation Bar */}
@@ -452,7 +439,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             <TouchableOpacity
               key={tab.id}
               style={styles.bottomNavItem}
-              onPress={() => setActiveBottomTab(tab.id)}
+              onPress={() => handleBottomTabPress(tab.id)}
               activeOpacity={0.7}
             >
               <Image
@@ -479,10 +466,8 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             partnerStatus={partnerStatus} 
             onLogout={onLogout}
             onNavigate={(screen) => {
-              console.log('📡 [OrdersScreen] Navigation requested from MoreScreen:', screen);
               // If navigating to pastOrders, reset bottom tab to orders first
               if (screen === 'pastOrders') {
-                console.log('📍 [OrdersScreen] Resetting bottom tab to orders before navigation');
                 setActiveBottomTab('orders');
               }
               // Then call the parent's onNavigate
@@ -499,7 +484,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             <TouchableOpacity
               key={tab.id}
               style={styles.bottomNavItem}
-              onPress={() => setActiveBottomTab(tab.id)}
+              onPress={() => handleBottomTabPress(tab.id)}
               activeOpacity={0.7}
             >
               <Image
@@ -677,7 +662,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
           <TouchableOpacity
             key={tab.id}
             style={styles.bottomNavItem}
-            onPress={() => setActiveBottomTab(tab.id)}
+            onPress={() => handleBottomTabPress(tab.id)}
             activeOpacity={0.7}
           >
             <Image

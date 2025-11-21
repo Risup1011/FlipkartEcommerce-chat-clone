@@ -67,26 +67,14 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       if (partnerId) {
         endpoint += `?partnerId=${encodeURIComponent(partnerId)}`;
       }
-      console.log('📤 [DynamicFormScreen] ========================================');
-      console.log('📤 [DynamicFormScreen] FETCHING FORM SECTIONS FROM API');
-      console.log('📤 [DynamicFormScreen] Section ID:', sectionId);
-      console.log('📤 [DynamicFormScreen] Partner ID:', partnerId);
-      console.log('📤 [DynamicFormScreen] Endpoint:', endpoint);
-      console.log('📤 [DynamicFormScreen] Method: GET');
-      console.log('📤 [DynamicFormScreen] ========================================');
       
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [DynamicFormScreen] Request Headers:', JSON.stringify(headers, null, 2));
       
       const response = await fetchWithAuth(endpoint, {
         method: 'GET',
         headers: headers,
       }, true);
 
-      console.log('📥 [DynamicFormScreen] ========================================');
-      console.log('📥 [DynamicFormScreen] API RESPONSE RECEIVED');
-      console.log('📥 [DynamicFormScreen] Response Status:', response.status);
-      console.log('📥 [DynamicFormScreen] Response OK:', response.ok);
       
       let data;
       try {
@@ -98,8 +86,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         throw new Error('Invalid response format from API');
       }
       
-      console.log('📥 [DynamicFormScreen] Response Data:', JSON.stringify(data, null, 2));
-      console.log('📥 [DynamicFormScreen] ========================================');
 
       // Handle 500 errors (server errors)
       if (response.status === 500) {
@@ -119,8 +105,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       }
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log('✅ [DynamicFormScreen] API Call Successful');
-        console.log('✅ [DynamicFormScreen] Total Sections:', data.data?.sections?.length || 0);
         
         // Find the requested section by section_id
         const targetSection = data.data?.sections?.find(
@@ -128,10 +112,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         );
 
         if (targetSection) {
-          console.log('✅ [DynamicFormScreen] Section Found:', targetSection.section_id);
-          console.log('✅ [DynamicFormScreen] Section Title:', targetSection.title);
-          console.log('✅ [DynamicFormScreen] Total Fields:', targetSection.fields?.length || 0);
-          console.log('✅ [DynamicFormScreen] Fields:', targetSection.fields?.map(f => `${f.key} (${f.type})`).join(', ') || 'None');
           
           setSectionData(targetSection);
           
@@ -153,12 +133,10 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
               } else {
                 initialFormData[field.key] = field.value;
               }
-              console.log(`✅ [DynamicFormScreen] Field "${field.key}" initialized with saved value from backend: ${field.value}`);
             } else {
               // No saved value, use defaults
               if (field.type === 'toggle') {
                 initialFormData[field.key] = field.default !== undefined ? field.default : false;
-                console.log(`✅ [DynamicFormScreen] Toggle field "${field.key}" initialized with default value: ${initialFormData[field.key]} (from backend: ${field.default})`);
               } else if (field.type === 'date') {
                 initialFormData[field.key] = '';
                 setSelectedDates(prev => ({ ...prev, [field.key]: null }));
@@ -169,7 +147,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
               }
             }
           });
-          console.log('✅ [DynamicFormScreen] Initialized Form Data:', JSON.stringify(initialFormData, null, 2));
           setFormData(initialFormData);
 
           // Handle dropdown options - check for inline options or options_source
@@ -177,7 +154,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
             if (field.type === 'dropdown') {
               if (field.options && Array.isArray(field.options)) {
                 // Inline options (e.g., for document_type)
-                console.log(`✅ [DynamicFormScreen] Dropdown "${field.key}" has inline options:`, field.options);
                 setFieldOptions(prev => ({ ...prev, [field.key]: field.options }));
               } else if (field.options_source && !field.options_source.includes('{')) {
                 // Options from API (no parameters needed)
@@ -209,7 +185,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       showToast('Network error. Please check your connection.', 'error');
     } finally {
       setLoading(false);
-      console.log('🏁 [DynamicFormScreen] Sections fetch completed, loading set to false');
     }
   };
 
@@ -230,7 +205,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       if (url.startsWith('http')) {
         // Already a full URL
         fullUrl = url;
-        console.log(`🔗 [DynamicFormScreen] URL is already full URL: ${fullUrl}`);
       } else {
         // Remove leading slash if present
         const originalUrl = url;
@@ -241,21 +215,14 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
           const baseUrlObj = new URL(API_BASE_URL);
           const basePath = baseUrlObj.pathname.replace(/^\/|\/$/g, ''); // Remove leading/trailing slashes
           
-          console.log(`🔗 [DynamicFormScreen] URL Construction Details:`);
-          console.log(`🔗 [DynamicFormScreen] - Original URL: ${originalUrl}`);
-          console.log(`🔗 [DynamicFormScreen] - Processed URL: ${url}`);
-          console.log(`🔗 [DynamicFormScreen] - Base Path from API_BASE_URL: ${basePath}`);
-          console.log(`🔗 [DynamicFormScreen] - URL starts with basePath: ${url.startsWith(basePath)}`);
           
           // Check if the URL already starts with the base path
           if (basePath && url.startsWith(basePath)) {
             // URL already contains base path, just prepend the domain and protocol
             fullUrl = `${baseUrlObj.protocol}//${baseUrlObj.host}/${url}`;
-            console.log(`🔗 [DynamicFormScreen] - Detected duplicate path, using domain only`);
           } else {
             // Normal case: prepend base URL (which already ends with /)
             fullUrl = `${API_BASE_URL.replace(/\/$/, '')}/${url}`;
-            console.log(`🔗 [DynamicFormScreen] - Normal path, prepending base URL`);
           }
         } catch (urlError) {
           // Fallback if URL constructor fails (shouldn't happen in React Native)
@@ -266,18 +233,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       
       const requestHeaders = await getApiHeaders(true); // Include authorization
       
-      console.log('📤 [DynamicFormScreen] ========================================');
-      console.log(`📤 [DynamicFormScreen] FETCHING DROPDOWN OPTIONS FOR: ${fieldKey}`);
-      console.log(`📤 [DynamicFormScreen] Field Key: ${fieldKey}`);
-      console.log(`📤 [DynamicFormScreen] Original Source: ${optionsSource}`);
-      console.log(`📤 [DynamicFormScreen] Parameters:`, JSON.stringify(params, null, 2));
-      console.log(`📤 [DynamicFormScreen] Parameters Count: ${Object.keys(params).length}`);
-      console.log(`📤 [DynamicFormScreen] Base URL: ${API_BASE_URL}`);
-      console.log(`📤 [DynamicFormScreen] Processed URL: ${url}`);
-      console.log(`📤 [DynamicFormScreen] Final URL: ${fullUrl}`);
-      console.log(`📤 [DynamicFormScreen] Method: GET`);
-      console.log(`📤 [DynamicFormScreen] Request Headers:`, JSON.stringify(requestHeaders, null, 2));
-      console.log('📤 [DynamicFormScreen] ========================================');
       
       const response = await fetchWithAuth(fullUrl, {
         method: 'GET',
@@ -290,21 +245,11 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         responseHeaders[key] = value;
       });
       
-      console.log('📥 [DynamicFormScreen] ========================================');
-      console.log(`📥 [DynamicFormScreen] OPTIONS API RESPONSE FOR: ${fieldKey}`);
-      console.log(`📥 [DynamicFormScreen] Response Status: ${response.status}`);
-      console.log(`📥 [DynamicFormScreen] Response Status Text: ${response.statusText}`);
-      console.log(`📥 [DynamicFormScreen] Response OK: ${response.ok}`);
-      console.log(`📥 [DynamicFormScreen] Response Type: ${response.type}`);
-      console.log(`📥 [DynamicFormScreen] Response Headers:`, JSON.stringify(responseHeaders, null, 2));
-      console.log(`📥 [DynamicFormScreen] Response URL: ${response.url}`);
       
       let data;
       let rawResponseText = null;
       try {
         rawResponseText = await response.text();
-        console.log(`📥 [DynamicFormScreen] Raw Response Text Length: ${rawResponseText.length} characters`);
-        console.log(`📥 [DynamicFormScreen] Raw Response Text (first 500 chars):`, rawResponseText.substring(0, 500));
         
         try {
           data = JSON.parse(rawResponseText);
@@ -320,41 +265,17 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         throw new Error(`Failed to read response from ${fieldKey} API`);
       }
       
-      console.log(`📥 [DynamicFormScreen] Parsed Response Data Type:`, typeof data);
-      console.log(`📥 [DynamicFormScreen] Parsed Response Data:`, JSON.stringify(data, null, 2));
-      console.log(`📥 [DynamicFormScreen] Response Data Keys:`, data ? Object.keys(data) : 'null/undefined');
-      console.log('📥 [DynamicFormScreen] ========================================');
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         // Detailed data structure analysis
-        console.log('🔍 [DynamicFormScreen] ========================================');
-        console.log(`🔍 [DynamicFormScreen] ANALYZING RESPONSE DATA STRUCTURE FOR: ${fieldKey}`);
-        console.log(`🔍 [DynamicFormScreen] Data object exists: ${data !== null && data !== undefined}`);
-        console.log(`🔍 [DynamicFormScreen] Data.code: ${data.code} (expected: 200)`);
-        console.log(`🔍 [DynamicFormScreen] Data.status: ${data.status} (expected: 'success')`);
-        console.log(`🔍 [DynamicFormScreen] Data.data exists: ${data.data !== null && data.data !== undefined}`);
         
         if (data.data) {
-          console.log(`🔍 [DynamicFormScreen] Data.data type: ${typeof data.data}`);
-          console.log(`🔍 [DynamicFormScreen] Data.data keys:`, Object.keys(data.data));
-          console.log(`🔍 [DynamicFormScreen] Data.data.states exists: ${data.data.states !== undefined}`);
-          console.log(`🔍 [DynamicFormScreen] Data.data.cities exists: ${data.data.cities !== undefined}`);
-          console.log(`🔍 [DynamicFormScreen] Data.data.areas exists: ${data.data.areas !== undefined}`);
-          console.log(`🔍 [DynamicFormScreen] Data.data.states type: ${Array.isArray(data.data.states) ? 'array' : typeof data.data.states}`);
-          console.log(`🔍 [DynamicFormScreen] Data.data.states length: ${Array.isArray(data.data.states) ? data.data.states.length : 'N/A'}`);
-          console.log(`🔍 [DynamicFormScreen] Data.data.cities length: ${Array.isArray(data.data.cities) ? data.data.cities.length : 'N/A'}`);
-          console.log(`🔍 [DynamicFormScreen] Data.data.areas length: ${Array.isArray(data.data.areas) ? data.data.areas.length : 'N/A'}`);
         } else {
           console.warn(`⚠️ [DynamicFormScreen] Data.data is missing or null`);
         }
-        console.log('🔍 [DynamicFormScreen] ========================================');
         
         // Handle different response formats
         const options = data.data?.states || data.data?.cities || data.data?.areas || data.data || [];
-        console.log(`✅ [DynamicFormScreen] Options loaded successfully for ${fieldKey}`);
-        console.log(`✅ [DynamicFormScreen] Options source: ${data.data?.states ? 'states' : data.data?.cities ? 'cities' : data.data?.areas ? 'areas' : 'data' || 'empty array'}`);
-        console.log(`✅ [DynamicFormScreen] Total Options: ${options.length}`);
-        console.log(`✅ [DynamicFormScreen] Options is array: ${Array.isArray(options)}`);
         
         if (options.length > 0) {
           // Better preview logging that handles different object formats
@@ -362,11 +283,7 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
             if (typeof o === 'string') return o;
             return o?.name || o?.label || o?.value || o?.id || JSON.stringify(o);
           }).join(', ');
-          console.log(`✅ [DynamicFormScreen] Options Preview:`, preview);
-          console.log(`✅ [DynamicFormScreen] First Option Type: ${typeof options[0]}`);
-          console.log(`✅ [DynamicFormScreen] First Option Sample:`, JSON.stringify(options[0], null, 2));
           if (typeof options[0] === 'object' && options[0] !== null) {
-            console.log(`✅ [DynamicFormScreen] First Option Keys:`, Object.keys(options[0]));
           }
         } else {
           console.warn(`⚠️ [DynamicFormScreen] Options array is empty - no options to display`);
@@ -437,13 +354,11 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       showToast(`Failed to load ${fieldKey} options`, 'error');
     } finally {
       setLoadingOptions(prev => ({ ...prev, [fieldKey]: false }));
-      console.log(`🏁 [DynamicFormScreen] Options fetch completed for ${fieldKey}, loading set to false`);
     }
   };
 
   // Handle field value change
   const handleFieldChange = (fieldKey, value) => {
-    console.log('🔄 [DynamicFormScreen] Field value changed:', fieldKey, '=', value);
     
     // Clear error for this field when user starts typing/selecting
     if (fieldErrors[fieldKey]) {
@@ -459,29 +374,24 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       
       // Handle dependent dropdowns
       if (fieldKey === 'state' && value) {
-        console.log('🔄 [DynamicFormScreen] State selected, resetting city and area');
         newData.city = '';
         newData.area = '';
         setFieldOptions(prev => ({ ...prev, city: [], area: [] }));
         
         const cityField = sectionData?.fields?.find(f => f.key === 'city');
         if (cityField?.options_source) {
-          console.log('📤 [DynamicFormScreen] Fetching cities for state:', value);
           fetchDropdownOptions('city', cityField.options_source, { state: value });
         }
       } else if (fieldKey === 'city' && value) {
-        console.log('🔄 [DynamicFormScreen] City selected, resetting area');
         newData.area = '';
         setFieldOptions(prev => ({ ...prev, area: [] }));
         
         const areaField = sectionData?.fields?.find(f => f.key === 'area');
         if (areaField?.options_source) {
-          console.log('📤 [DynamicFormScreen] Fetching areas for city:', value);
           fetchDropdownOptions('area', areaField.options_source, { city: value });
         }
       }
       
-      console.log('✅ [DynamicFormScreen] Updated form data:', JSON.stringify(newData, null, 2));
       return newData;
     });
   };
@@ -572,7 +482,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       }
     } catch (error) {
       if (DocumentPicker.isCancel(error)) {
-        console.log('User cancelled file picker');
       } else {
         console.error('Error selecting file:', error);
         showToast('Failed to select file', 'error');
@@ -615,47 +524,10 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       // (This is a safety measure, fetchWithAuth also handles this)
       delete authHeaders['Content-Type'];
 
-      console.log('📤 [DynamicFormScreen] ========================================');
-      console.log(`📤 [DynamicFormScreen] UPLOADING FILE FOR: ${fieldKey}`);
-      console.log(`📤 [DynamicFormScreen] Endpoint: ${endpoint}`);
-      console.log(`📤 [DynamicFormScreen] Method: POST`);
-      console.log(`📤 [DynamicFormScreen] Full URL: ${endpoint}`);
-      console.log('');
-      console.log(`📤 [DynamicFormScreen] FILE DETAILS:`);
-      console.log(`📤 [DynamicFormScreen] - File URI: ${file.uri}`);
-      console.log(`📤 [DynamicFormScreen] - File Name: ${fileName}`);
-      console.log(`📤 [DynamicFormScreen] - File Type: ${fileType}`);
-      console.log(`📤 [DynamicFormScreen] - File Size: ${fileSize} bytes (${(fileSize / 1024).toFixed(2)} KB)`);
-      console.log(`📤 [DynamicFormScreen] - File Object Keys:`, Object.keys(file));
-      console.log(`📤 [DynamicFormScreen] - File Object:`, JSON.stringify(fileObject, null, 2));
-      console.log('');
-      console.log(`📤 [DynamicFormScreen] REQUEST HEADERS:`);
-      console.log(`📤 [DynamicFormScreen] - Authorization: ${authToken ? 'Present ✅' : 'Missing ❌'}`);
       if (authToken) {
-        console.log(`📤 [DynamicFormScreen] - Token (first 20 chars): ${authToken.substring(0, 20)}...`);
       }
-      console.log(`📤 [DynamicFormScreen] - Content-Type: ${authHeaders['Content-Type'] || 'Not set (will be auto-set by RN for multipart/form-data) ✅'}`);
-      console.log('');
-      console.log(`📤 [DynamicFormScreen] FORMDATA VERIFICATION:`);
-      console.log(`📤 [DynamicFormScreen] - FormData created: ✅`);
-      console.log(`📤 [DynamicFormScreen] - Field name: 'file'`);
-      console.log(`📤 [DynamicFormScreen] - File object in FormData:`, JSON.stringify(fileObject, null, 2));
-      console.log('📤 [DynamicFormScreen] ========================================');
 
       // Generate curl-equivalent command for debugging (matches backend expected format)
-      console.log('🔧 [DynamicFormScreen] CURL EQUIVALENT REQUEST (for backend reference):');
-      console.log(`curl --location '${endpoint}' \\`);
-      console.log(`  --header 'Authorization: ${authToken}' \\`);
-      console.log(`  --form 'file=@"${file.uri}"'`);
-      console.log('');
-      console.log('🔧 [DynamicFormScreen] VERIFICATION CHECKLIST:');
-      console.log('  ✅ Endpoint matches backend: /v1/partners/media/upload');
-      console.log('  ✅ Method: POST');
-      console.log('  ✅ Authorization header included');
-      console.log('  ✅ FormData field name: "file"');
-      console.log('  ✅ File URI, name, and type set correctly');
-      console.log('  ✅ Content-Type will be auto-set by React Native');
-      console.log('📤 [DynamicFormScreen] ========================================');
 
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -676,26 +548,8 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       }
 
       const data = await response.json();
-      console.log('📥 [DynamicFormScreen] ========================================');
-      console.log(`📥 [DynamicFormScreen] FILE UPLOAD RESPONSE FOR: ${fieldKey}`);
-      console.log(`📥 [DynamicFormScreen] Response Status: ${response.status}`);
-      console.log(`📥 [DynamicFormScreen] Response OK: ${response.ok}`);
-      console.log(`📥 [DynamicFormScreen] Response Headers:`, JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2));
-      console.log('');
-      console.log(`📥 [DynamicFormScreen] RESPONSE DATA:`);
-      console.log(JSON.stringify(data, null, 2));
-      console.log('');
-      console.log(`📥 [DynamicFormScreen] RESPONSE VERIFICATION:`);
-      console.log(`📥 [DynamicFormScreen] - Code: ${data.code} ${data.code === 201 ? '✅' : '❌'}`);
-      console.log(`📥 [DynamicFormScreen] - Status: ${data.status} ${data.status === 'success' ? '✅' : '❌'}`);
-      console.log(`📥 [DynamicFormScreen] - Message: ${data.message || 'N/A'}`);
       if (data.data) {
-        console.log(`📥 [DynamicFormScreen] - File URL: ${data.data.file_url || 'Missing ❌'}`);
-        console.log(`📥 [DynamicFormScreen] - File Size: ${data.data.file_size || 'N/A'} bytes`);
-        console.log(`📥 [DynamicFormScreen] - Content Type: ${data.data.content_type || 'N/A'}`);
-        console.log(`📥 [DynamicFormScreen] - File Name: ${data.data.file_name || 'N/A'}`);
       }
-      console.log('📥 [DynamicFormScreen] ========================================');
 
       // Accept both 200 (OK) and 201 (Created) as success codes for file uploads
       const isSuccess = response.ok && (data.code === 200 || data.code === 201) && data.status === 'success';
@@ -703,10 +557,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       if (isSuccess) {
         const fileUrl = data.data?.file_url || data.data?.url;
         if (fileUrl) {
-          console.log(`✅ [DynamicFormScreen] File uploaded successfully: ${fileUrl}`);
-          console.log(`✅ [DynamicFormScreen] File URL: ${fileUrl}`);
-          console.log(`✅ [DynamicFormScreen] File Size: ${data.data?.file_size || 'N/A'} bytes`);
-          console.log(`✅ [DynamicFormScreen] Content Type: ${data.data?.content_type || 'N/A'}`);
           return fileUrl;
         } else {
           console.error('❌ [DynamicFormScreen] File URL not found in response');
@@ -761,11 +611,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
     const fileExtension = fileName?.split('.').pop()?.toLowerCase() || 
                          fileType?.split('/').pop()?.toLowerCase() || '';
     
-    console.log(`🔍 [DynamicFormScreen] Validating file for ${fieldKey}:`);
-    console.log(`🔍 [DynamicFormScreen] - File Name: ${fileName}`);
-    console.log(`🔍 [DynamicFormScreen] - File Type: ${fileType}`);
-    console.log(`🔍 [DynamicFormScreen] - File Extension: ${fileExtension}`);
-    console.log(`🔍 [DynamicFormScreen] - Allowed Types: ${allowedTypes.join(', ')}`);
     
     if (!allowedTypes.includes(fileExtension)) {
       showToast(`File type not allowed. Allowed types: ${allowedTypes.join(', ')}`, 'error');
@@ -776,8 +621,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
     const maxSizeMB = field.max_size_mb || 5;
     const fileSizeMB = fileSize / (1024 * 1024);
     
-    console.log(`🔍 [DynamicFormScreen] - File Size: ${fileSize} bytes (${fileSizeMB.toFixed(2)} MB)`);
-    console.log(`🔍 [DynamicFormScreen] - Max Size: ${maxSizeMB} MB`);
     
     if (fileSizeMB > maxSizeMB) {
       showToast(`File size exceeds ${maxSizeMB}MB limit`, 'error');
@@ -814,15 +657,8 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         channel: 'whatsapp',
       };
       
-      console.log('📤 [DynamicFormScreen] ========================================');
-      console.log(`📤 [DynamicFormScreen] GENERATING OTP FOR: ${fieldKey}`);
-      console.log(`📤 [DynamicFormScreen] Endpoint: ${endpoint}`);
-      console.log(`📤 [DynamicFormScreen] Method: POST`);
-      console.log(`📤 [DynamicFormScreen] Request Body:`, JSON.stringify(requestBody, null, 2));
-      console.log('📤 [DynamicFormScreen] ========================================');
       
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [DynamicFormScreen] Request Headers:', JSON.stringify(headers, null, 2));
       
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -830,19 +666,10 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         body: JSON.stringify(requestBody),
       }, true);
 
-      console.log('📥 [DynamicFormScreen] ========================================');
-      console.log(`📥 [DynamicFormScreen] OTP GENERATION RESPONSE FOR: ${fieldKey}`);
-      console.log(`📥 [DynamicFormScreen] Response Status: ${response.status}`);
-      console.log(`📥 [DynamicFormScreen] Response OK: ${response.ok}`);
       
       const data = await response.json();
-      console.log(`📥 [DynamicFormScreen] Response Data:`, JSON.stringify(data, null, 2));
-      console.log('📥 [DynamicFormScreen] ========================================');
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log(`✅ [DynamicFormScreen] OTP generated successfully for ${fieldKey}`);
-        console.log(`✅ [DynamicFormScreen] OTP ID: ${data.data?.otp_id}`);
-        console.log(`✅ [DynamicFormScreen] Expires In: ${data.data?.expires_in} seconds`);
         
         setOtpData(prev => ({
           ...prev,
@@ -893,15 +720,8 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         otp: otpCode,
       };
       
-      console.log('📤 [DynamicFormScreen] ========================================');
-      console.log(`📤 [DynamicFormScreen] VERIFYING OTP FOR: ${fieldKey}`);
-      console.log(`📤 [DynamicFormScreen] Endpoint: ${endpoint}`);
-      console.log(`📤 [DynamicFormScreen] Method: POST`);
-      console.log(`📤 [DynamicFormScreen] Request Body:`, JSON.stringify(requestBody, null, 2));
-      console.log('📤 [DynamicFormScreen] ========================================');
       
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [DynamicFormScreen] Request Headers:', JSON.stringify(headers, null, 2));
       
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -909,10 +729,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         body: JSON.stringify(requestBody),
       }, true);
 
-      console.log('📥 [DynamicFormScreen] ========================================');
-      console.log(`📥 [DynamicFormScreen] OTP VERIFICATION RESPONSE FOR: ${fieldKey}`);
-      console.log(`📥 [DynamicFormScreen] Response Status: ${response.status}`);
-      console.log(`📥 [DynamicFormScreen] Response OK: ${response.ok}`);
       
       let data;
       try {
@@ -925,11 +741,8 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         throw new Error(`Invalid response format from OTP verification API`);
       }
       
-      console.log(`📥 [DynamicFormScreen] Response Data:`, JSON.stringify(data, null, 2));
-      console.log('📥 [DynamicFormScreen] ========================================');
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log(`✅ [DynamicFormScreen] OTP verified successfully for ${fieldKey}`);
         const otpVerifiedMessage = sectionData?.messages?.otp?.verified || 'OTP verified successfully';
         showToast(otpVerifiedMessage, 'success');
         setOtpData(prev => ({
@@ -1007,7 +820,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
                   value = item;
                 } else if (item?.id) {
                   value = item.id;
-                  console.log(`✅ [DynamicFormScreen] Selected ${field.key}:`, item.id, '(', item.name, ')');
                 } else {
                   value = item?.label || item?.value || item?.name || '';
                 }
@@ -1182,14 +994,12 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         );
 
       case 'toggle':
-        console.log(`🔄 [DynamicFormScreen] Rendering toggle field: ${field.key}, label: "${field.label}", value: ${fieldValue}, default: ${field.default}, required: ${isRequired}`);
         return (
           <View key={field.key} style={styles.fieldContainer}>
             <View style={styles.toggleRow}>
               <CustomToggle
                 value={fieldValue}
                 onValueChange={(value) => {
-                  console.log(`🔄 [DynamicFormScreen] Toggle "${field.key}" changed to: ${value}`);
                   handleFieldChange(field.key, value);
                 }}
               />
@@ -1206,10 +1016,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
   };
 
   const handleProceed = async () => {
-    console.log('📤 [DynamicFormScreen] ========================================');
-    console.log('📤 [DynamicFormScreen] FORM SUBMISSION INITIATED');
-    console.log('📤 [DynamicFormScreen] Current Form Data:', JSON.stringify(formData, null, 2));
-    console.log('📤 [DynamicFormScreen] OTP Data:', JSON.stringify(otpData, null, 2));
     
     // Validate all required fields
     const missingFields = sectionData?.fields?.filter(field => {
@@ -1298,12 +1104,8 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         ...submissionData,
       };
 
-      console.log('📤 [DynamicFormScreen] Submitting to API');
-      console.log('📤 [DynamicFormScreen] Endpoint:', endpoint);
-      console.log('📤 [DynamicFormScreen] Request Body:', JSON.stringify(requestBody, null, 2));
 
       const headers = await getApiHeaders(true); // Include authorization
-      console.log('📤 [DynamicFormScreen] Request Headers:', JSON.stringify(headers, null, 2));
 
       const response = await fetchWithAuth(endpoint, {
         method: 'POST',
@@ -1312,10 +1114,8 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       }, true);
 
       const data = await response.json();
-      console.log('📥 [DynamicFormScreen] API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log('✅ [DynamicFormScreen] Form submitted successfully');
         const successMessage = sectionData?.messages?.success?.form_submitted || data.message || 'Form submitted successfully';
         showToast(successMessage, 'success');
         

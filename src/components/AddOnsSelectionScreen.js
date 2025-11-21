@@ -33,14 +33,12 @@ const AddOnsSelectionScreen = ({
     setIsLoadingAddons(true);
     try {
       const url = `${API_BASE_URL}v1/catalog/addons`;
-      console.log('📡 [AddOnsSelectionScreen] Fetching add-ons from:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'GET',
       });
 
       const data = await response.json();
-      console.log('📥 [AddOnsSelectionScreen] Add-ons API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.code === 201) && data.status === 'success') {
         const mappedAddons = (data.data || []).map((addon) => ({
@@ -52,7 +50,6 @@ const AddOnsSelectionScreen = ({
         }));
 
         setAddons(mappedAddons);
-        console.log(`✅ [AddOnsSelectionScreen] Loaded ${mappedAddons.length} add-ons`);
       } else {
         const errorMessage = data.message || data.error || 'Failed to fetch add-ons';
         console.error('❌ [AddOnsSelectionScreen] Failed to fetch add-ons:', errorMessage);
@@ -78,8 +75,6 @@ const AddOnsSelectionScreen = ({
         itemData.add_ons.map((linkedAddon) => linkedAddon.add_on_id || linkedAddon.id)
       );
       setSelectedAddons(linkedAddonIds);
-      console.log('✅ [AddOnsSelectionScreen] Pre-selected linked add-ons:', Array.from(linkedAddonIds));
-      console.log('✅ [AddOnsSelectionScreen] Item add_ons:', JSON.stringify(itemData.add_ons, null, 2));
     }
   }, [itemData, addons]);
 
@@ -122,7 +117,6 @@ const AddOnsSelectionScreen = ({
     try {
       const itemId = itemData.id;
       const url = `${API_BASE_URL}v1/catalog/items/${itemId}/addons`;
-      console.log('📡 [AddOnsSelectionScreen] Linking add-ons to item:', url);
 
       // Prepare request body
       // Ensure all values match API expectations:
@@ -143,10 +137,10 @@ const AddOnsSelectionScreen = ({
                             ? Number(customizationData.min_selection)
                             : 0;
         
-        // Based on API example, selection_type should be "OPTIONAL"
+        // API only accepts "OPTIONAL" as selection_type
         // Mandatory selection is controlled by min_selection > 0
-        // The API might only accept "OPTIONAL" as the selection_type value
-        const selectionType = 'OPTIONAL'; // Always use OPTIONAL as per API example
+        // Always use "OPTIONAL" as per API specification
+        const selectionType = 'OPTIONAL';
         
         const payload = {
           add_on_id: String(addonId), // Ensure it's a string
@@ -155,13 +149,9 @@ const AddOnsSelectionScreen = ({
           max_selection: Number(maxSelection),
         };
         
-        console.log('📤 [AddOnsSelectionScreen] Prepared payload for addon:', addonId, payload);
         return payload;
       });
 
-      console.log('📤 [AddOnsSelectionScreen] Request body:', JSON.stringify(requestBody, null, 2));
-      console.log('📤 [AddOnsSelectionScreen] Item ID:', itemId);
-      console.log('📤 [AddOnsSelectionScreen] Customization data:', JSON.stringify(customizationData, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: 'POST',
@@ -169,8 +159,6 @@ const AddOnsSelectionScreen = ({
       });
 
       const data = await response.json();
-      console.log('📥 [AddOnsSelectionScreen] Link Add-ons API Response Status:', response.status);
-      console.log('📥 [AddOnsSelectionScreen] Link Add-ons API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         showToast('Add-ons linked successfully', 'success');

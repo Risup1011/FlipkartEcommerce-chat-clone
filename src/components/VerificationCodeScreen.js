@@ -41,11 +41,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
     try {
       setLoadingScreenData(true);
       const endpoint = `${API_BASE_URL}v1/onboarding/sections`;
-      console.log('📤 [VerificationCodeScreen] ========================================');
-      console.log('📤 [VerificationCodeScreen] FETCHING SCREEN CONFIG FROM API');
-      console.log('📤 [VerificationCodeScreen] Endpoint:', endpoint);
-      console.log('📤 [VerificationCodeScreen] Method: GET');
-      console.log('📤 [VerificationCodeScreen] ========================================');
       
       const response = await fetch(endpoint, {
         method: 'GET',
@@ -54,10 +49,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         },
       });
 
-      console.log('📥 [VerificationCodeScreen] ========================================');
-      console.log('📥 [VerificationCodeScreen] API RESPONSE RECEIVED');
-      console.log('📥 [VerificationCodeScreen] Response Status:', response.status);
-      console.log('📥 [VerificationCodeScreen] Response OK:', response.ok);
       
       let data;
       try {
@@ -72,8 +63,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         return;
       }
       
-      console.log('📥 [VerificationCodeScreen] Response Data:', JSON.stringify(data, null, 2));
-      console.log('📥 [VerificationCodeScreen] ========================================');
 
       // Handle 500 errors (server errors) - continue with fallback
       if (response.status === 500) {
@@ -87,8 +76,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
       }
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        console.log('✅ [VerificationCodeScreen] API Call Successful');
-        console.log('✅ [VerificationCodeScreen] Total Sections:', data.data?.sections?.length || 0);
         
         // Find VERIFICATION_CODE section or use first section as fallback
         const verificationSection = data.data?.sections?.find(
@@ -96,8 +83,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         ) || data.data?.sections?.[0];
 
         if (verificationSection) {
-          console.log('✅ [VerificationCodeScreen] Section Found:', verificationSection.section_id);
-          console.log('✅ [VerificationCodeScreen] Screen Config:', JSON.stringify(verificationSection, null, 2));
           setScreenData(verificationSection);
         } else {
           console.warn('⚠️ [VerificationCodeScreen] VERIFICATION_CODE section not found, using fallback');
@@ -122,15 +107,12 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
       setScreenData(null);
     } finally {
       setLoadingScreenData(false);
-      console.log('🏁 [VerificationCodeScreen] Screen config fetch completed');
     }
   };
 
   // Log OTP data for debugging
   React.useEffect(() => {
-    console.log('VerificationCodeScreen - OTP Data:', otpData);
     if (otpData?.otp && typeof otpData.otp === 'string' && otpData.otp.length === 4) {
-      console.log('OTP Value:', otpData.otp);
     }
   }, [otpData]);
 
@@ -145,12 +127,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         const elapsed = now - sentAt;
         const remaining = Math.max(0, Math.floor((expiresInMs - elapsed) / 1000)); // Convert back to seconds
         
-        console.log('⏱️ [VerificationCodeScreen] Backend timer calculation:');
-        console.log('⏱️ [VerificationCodeScreen] Sent at:', new Date(sentAt).toISOString());
-        console.log('⏱️ [VerificationCodeScreen] Expires in:', otpData.expires_in, 'seconds');
-        console.log('⏱️ [VerificationCodeScreen] Elapsed:', Math.floor(elapsed / 1000), 'seconds');
-        console.log('⏱️ [VerificationCodeScreen] Remaining:', remaining, 'seconds');
-        console.log('⏱️ [VerificationCodeScreen] Backend timer duration:', otpData.expires_in, 'seconds =', Math.floor(otpData.expires_in / 60), 'minutes');
         
         setTimeRemaining(remaining);
         setOtpExpired(remaining === 0);
@@ -231,12 +207,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
     
     // Bypass for mock OTP (development/testing only)
     if (otpCode === MOCK_OTP_CODE) {
-      console.log('🚀 [VerificationCodeScreen] ========================================');
-      console.log('🚀 [VerificationCodeScreen] FRONTEND BYPASS ACTIVATED');
-      console.log('🚀 [VerificationCodeScreen] OTP Code:', MOCK_OTP_CODE);
-      console.log('🚀 [VerificationCodeScreen] Mock Partner Status:', MOCK_OTP_PARTNER_STATUS);
-      console.log('🚀 [VerificationCodeScreen] Source: Frontend Config (NOT API)');
-      console.log('🚀 [VerificationCodeScreen] ========================================');
       
       showToast(`OTP verified successfully (Mock - ${MOCK_OTP_PARTNER_STATUS})`, 'success');
       
@@ -264,7 +234,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
     try {
       // Get device information
       const deviceInfo = await getDeviceInfo();
-      console.log('📱 [VerificationCodeScreen] Device Info:', JSON.stringify(deviceInfo, null, 2));
 
       const requestBody = {
         otp_id: otpData.otp_id,
@@ -278,22 +247,12 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
       // Otherwise, use the default endpoint (you can change the response in mockachino)
       let endpoint = `${API_BASE_URL}v1/auth/verify-otp`;
       
-      console.log('📤 [VerificationCodeScreen] ========================================');
-      console.log('📤 [VerificationCodeScreen] MAKING API CALL TO VERIFY OTP');
-      console.log('📤 [VerificationCodeScreen] OTP Code Entered:', otpCode);
-      console.log('📤 [VerificationCodeScreen] OTP ID:', otpData.otp_id);
       
       if (USE_MOCK_OTP_ENDPOINTS && MOCK_OTP_ENDPOINTS[otpCode]) {
         endpoint = MOCK_OTP_ENDPOINTS[otpCode];
-        console.log('🔀 [VerificationCodeScreen] Using Custom Endpoint Mapping');
-        console.log(`🔀 [VerificationCodeScreen] OTP Code ${otpCode} → ${endpoint}`);
       } else {
-        console.log('📡 [VerificationCodeScreen] Using Default Endpoint');
-        console.log(`📡 [VerificationCodeScreen] Endpoint: ${endpoint}`);
       }
       
-      console.log('📤 [VerificationCodeScreen] Request Body:', JSON.stringify(requestBody, null, 2));
-      console.log('📤 [VerificationCodeScreen] ========================================');
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -305,10 +264,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
 
       const data = await response.json();
       
-      console.log('📥 [VerificationCodeScreen] ========================================');
-      console.log('📥 [VerificationCodeScreen] API RESPONSE RECEIVED');
-      console.log('📥 [VerificationCodeScreen] Response Status:', response.status);
-      console.log('📥 [VerificationCodeScreen] Response Data:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         // Success - handle different partner_status values
@@ -320,22 +275,11 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         const tokenType = data.data?.token_type || 'Bearer'; // Extract token_type
         const expiresIn = data.data?.expires_in; // Extract expires_in
         
-        console.log('✅ [VerificationCodeScreen] API CALL SUCCESSFUL');
-        console.log('✅ [VerificationCodeScreen] Partner Status from API:', partnerStatus);
-        console.log('✅ [VerificationCodeScreen] Partner ID from API:', partnerId);
-        console.log('✅ [VerificationCodeScreen] Onboarding ID from API:', onboardingId);
-        console.log('✅ [VerificationCodeScreen] Access Token received:', accessToken ? 'Yes' : 'No');
-        console.log('✅ [VerificationCodeScreen] Refresh Token received:', refreshToken ? 'Yes' : 'No');
-        console.log('✅ [VerificationCodeScreen] Token Type:', tokenType);
-        console.log('✅ [VerificationCodeScreen] Token Expires In:', expiresIn, 'seconds');
-        console.log('✅ [VerificationCodeScreen] Source: API Response (NOT Frontend Bypass)');
-        console.log('📥 [VerificationCodeScreen] ========================================');
         
         // Store tokens in AsyncStorage
         if (accessToken && refreshToken) {
           const tokensStored = await storeTokens(accessToken, refreshToken);
           if (tokensStored) {
-            console.log('💾 [VerificationCodeScreen] Both tokens stored successfully');
           } else {
             console.warn('⚠️ [VerificationCodeScreen] Failed to store one or both tokens');
           }
@@ -353,8 +297,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         }
       } else {
         // Handle error cases
-        console.log('❌ [VerificationCodeScreen] API CALL FAILED');
-        console.log('❌ [VerificationCodeScreen] Response Status:', response.status);
         const errorCode = data.error_code;
         // Use backend error messages based on error code, with fallbacks
         let errorMessage = data.message;
@@ -369,9 +311,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
             errorMessage = screenData?.messages?.error?.verify_failed || 'Failed to verify OTP. Please try again.';
           }
         }
-        console.log('❌ [VerificationCodeScreen] Error Code:', errorCode);
-        console.log('❌ [VerificationCodeScreen] Error Message:', errorMessage);
-        console.log('📥 [VerificationCodeScreen] ========================================');
 
         if (response.status === 400 && errorCode === 'INVALID_OTP') {
           // Case 1: Invalid OTP
@@ -425,7 +364,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
       showToast(errorMessage, 'error');
     } finally {
       setLoading(false);
-      console.log('🏁 [VerificationCodeScreen] API call completed, loading set to false');
     }
   };
 

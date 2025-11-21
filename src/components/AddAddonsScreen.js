@@ -17,19 +17,30 @@ import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 import { useToast } from './ToastContext';
 
-const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallback, addonType = 'ADD_ONS', addonTitle = 'Add-ons', itemData = null, onItemDataUpdate = null }) => {
+const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallback, addonType = 'ADD_ONS', addonTitle = 'Add-ons', itemData = null, onItemDataUpdate = null, configData = null }) => {
   const { showToast } = useToast();
-  const [customizationTitle, setCustomizationTitle] = useState(addonTitle);
+  // For CUSTOM addons, start with empty string if new, otherwise use addonTitle
+  const [customizationTitle, setCustomizationTitle] = useState(
+    addonType === 'CUSTOM' ? '' : addonTitle
+  );
   const [isCompulsory, setIsCompulsory] = useState(true);
   const [minSelection, setMinSelection] = useState('');
   const [maxSelection, setMaxSelection] = useState('All');
   const [showAddOnsSelection, setShowAddOnsSelection] = useState(false);
   const [linkedAddons, setLinkedAddons] = useState([]);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [allAddons, setAllAddons] = useState([]); // Store all add-ons to get prices
 
   const minSelectionOptions = ['0', '1', '2', '3', '4', '5'];
   const maxSelectionOptions = ['All', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+
+  // Get UI labels from config with fallbacks
+  const getUILabel = (key, fallback) => {
+    return configData?.addon_screen_labels?.[key] || 
+           configData?.ui_labels?.[key] || 
+           fallback;
+  };
 
   // Fetch all add-ons to get prices for linked add-ons
   useEffect(() => {
@@ -62,25 +73,20 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
         };
       });
       setLinkedAddons(enrichedLinkedAddons);
-      console.log('📋 [AddAddonsScreen] Loaded linked add-ons:', enrichedLinkedAddons);
 
       // Prefill customization settings from the first linked add-on
       // (assuming all add-ons in the same group share the same settings)
       const firstLinkedAddon = enrichedLinkedAddons[0];
       if (firstLinkedAddon) {
-        console.log('🔍 [AddAddonsScreen] Prefilling customization settings from linked add-on:', firstLinkedAddon);
-        
         // Prefill selection type (Compulsory/Optional)
         if (firstLinkedAddon.selection_type) {
           const isMandatory = firstLinkedAddon.selection_type === 'MANDATORY';
           setIsCompulsory(isMandatory);
-          console.log('✅ [AddAddonsScreen] Prefilled isCompulsory:', isMandatory);
         }
 
         // Prefill min selection
         if (firstLinkedAddon.min_selection !== undefined && firstLinkedAddon.min_selection !== null) {
           setMinSelection(String(firstLinkedAddon.min_selection));
-          console.log('✅ [AddAddonsScreen] Prefilled minSelection:', firstLinkedAddon.min_selection);
         }
 
         // Prefill max selection
@@ -88,15 +94,12 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
           // Convert 999 (unlimited) to "All", otherwise use the number
           if (firstLinkedAddon.max_selection === 999 || firstLinkedAddon.max_selection >= 10) {
             setMaxSelection('All');
-            console.log('✅ [AddAddonsScreen] Prefilled maxSelection: All (unlimited)');
           } else {
             setMaxSelection(String(firstLinkedAddon.max_selection));
-            console.log('✅ [AddAddonsScreen] Prefilled maxSelection:', firstLinkedAddon.max_selection);
           }
         } else {
           // If max_selection is null, it means unlimited
           setMaxSelection('All');
-          console.log('✅ [AddAddonsScreen] Prefilled maxSelection: All (null = unlimited)');
         }
       }
     } else {
@@ -105,13 +108,117 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
       setIsCompulsory(true);
       setMinSelection('');
       setMaxSelection('All');
+      // For CUSTOM addons, clear the title so user can type directly
+      if (addonType === 'CUSTOM') {
+        setCustomizationTitle('');
+      }
     }
   }, [itemData, allAddons]);
+
+  // Handle save customization settings
+  const handleSaveSettings = async () => {
+    if (!itemData || !itemData.id) {
+      const errorMsg = getUILabel('item_data_missing', 'Item data is missing');
+      showToast(errorMsg, 'error');
+      return;
+    }
+
+    if (linkedAddons.length === 0) {
+      const errorMsg = getUILabel('addon_at_least_one_required', 'Please add at least one add-on before saving settings');
+      showToast(errorMsg, 'error');
+      return;
+    }
+
+    // Validate min selection
+    if (isCompulsory && (!minSelection || minSelection === '')) {
+      const errorMsg = getUILabel('min_selection_required_compulsory', 'Please select minimum selection for compulsory add-ons');
+      showToast(errorMsg, 'error');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const itemId = itemData.id;
+      
+      // Prepare customization settings
+      // API only accepts "OPTIONAL" as selection_type
+      // Mandatory selection is controlled by min_selection > 0
+      // Always use "OPTIONAL" as per API specification
+      const selectionType = 'OPTIONAL';
+      const minSelectionValue = isCompulsory ? parseInt(minSelection) || 1 : 0;
+      const maxSelectionValue = maxSelection === 'All' ? 999 : parseInt(maxSelection);
+
+      // Prepare request body with all linked add-ons and updated settings
+      // Use the same format as AddOnsSelectionScreen (POST with array)
+      const requestBody = linkedAddons.map((linkedAddon) => {
+        const addonId = linkedAddon.add_on_id || linkedAddon.id;
+        return {
+          add_on_id: String(addonId), // Ensure it's a string
+          selection_type: selectionType,
+          min_selection: Number(minSelectionValue),
+          max_selection: Number(maxSelectionValue),
+        };
+      });
+
+      const url = `${API_BASE_URL}v1/catalog/items/${itemId}/addons`;
+
+      // Use POST to update all add-ons at once (same endpoint as linking)
+      const response = await fetchWithAuth(url, {
+        method: 'POST',
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && (data.code === 200 || data.status === 'success')) {
+        const successMsg = getUILabel('addon_settings_saved_success', 'Customization settings saved successfully');
+        showToast(successMsg, 'success');
+        
+        // Use the updated item data from response if available
+        if (data.data) {
+          const updatedItemData = data.data;
+          // Update itemData via callback
+          if (onItemDataUpdate) {
+            onItemDataUpdate(updatedItemData);
+          }
+        } else {
+          // Fallback: Fetch updated item data to refresh the screen
+          try {
+            const itemUrl = `${API_BASE_URL}v1/catalog/items/${itemId}`;
+            const itemResponse = await fetchWithAuth(itemUrl, { method: 'GET' });
+            const itemDataResponse = await itemResponse.json();
+            
+            if (itemResponse.ok && (itemDataResponse.code === 200 || itemDataResponse.status === 'success')) {
+              const updatedItemData = itemDataResponse.data;
+              // Update itemData via callback
+              if (onItemDataUpdate) {
+                onItemDataUpdate(updatedItemData);
+              }
+            }
+          } catch (error) {
+            console.error('❌ [AddAddonsScreen] Error fetching updated item data:', error);
+            // Still show success since settings were saved
+          }
+        }
+      } else {
+        const errorMessage = data.message || data.error || 'Failed to update add-on settings';
+        console.error('❌ [AddAddonsScreen] Failed to update add-ons:', errorMessage);
+        showToast(errorMessage, 'error');
+      }
+    } catch (error) {
+      console.error('❌ [AddAddonsScreen] Error saving customization settings:', error);
+      const errorMsg = getUILabel('addon_save_settings_error', 'Failed to save customization settings');
+      showToast(errorMsg, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Handle remove/unlink add-on
   const handleRemoveAddon = async (addonId) => {
     if (!itemData || !itemData.id) {
-      showToast('Item data is missing', 'error');
+      const errorMsg = getUILabel('item_data_missing', 'Item data is missing');
+      showToast(errorMsg, 'error');
       return;
     }
 
@@ -119,17 +226,16 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
     try {
       const itemId = itemData.id;
       const url = `${API_BASE_URL}v1/catalog/items/${itemId}/addons/${addonId}`;
-      console.log('📡 [AddAddonsScreen] Unlinking add-on:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'DELETE',
       });
 
       const data = await response.json();
-      console.log('📥 [AddAddonsScreen] Unlink Add-on API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
-        showToast('Add-on removed successfully', 'success');
+        const successMsg = getUILabel('addon_removed_success', 'Add-on removed successfully');
+        showToast(successMsg, 'success');
         // Call onDelete callback to refresh item data before updating local state
         if (onDeleteCallback) {
           await onDeleteCallback();
@@ -157,7 +263,8 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
       }
     } catch (error) {
       console.error('❌ [AddAddonsScreen] Error removing add-on:', error);
-      showToast('Failed to remove add-on', 'error');
+      const errorMsg = getUILabel('addon_remove_error', 'Failed to remove add-on');
+      showToast(errorMsg, 'error');
     } finally {
       setIsRemoving(false);
     }
@@ -204,11 +311,11 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
         {/* Title of Customization */}
         <View style={styles.section}>
           <Text style={styles.label}>
-            Title of customization<Text style={styles.asterisk}> *</Text>
+            {getUILabel('customization_title_label', 'Title of customization')}<Text style={styles.asterisk}> *</Text>
           </Text>
           <TextInput
             style={styles.titleInput}
-            placeholder="Enter customization title"
+            placeholder={getUILabel('customization_title_placeholder', 'Enter customization title')}
             placeholderTextColor="#999"
             value={customizationTitle}
             onChangeText={setCustomizationTitle}
@@ -218,10 +325,10 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
         {/* Customization Behaviors */}
         <View style={styles.section}>
           <Text style={styles.label}>
-            Customization behaviors<Text style={styles.asterisk}> *</Text>
+            {getUILabel('customization_behaviors_label', 'Customization behaviors')}<Text style={styles.asterisk}> *</Text>
           </Text>
           <View style={styles.behaviorsContainer}>
-            <Text style={styles.behaviorLabel}>Customer selection is</Text>
+            <Text style={styles.behaviorLabel}>{getUILabel('customer_selection_label', 'Customer selection is')}</Text>
             <View style={styles.toggleContainer}>
               <TouchableOpacity
                 style={[
@@ -237,7 +344,7 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
                     isCompulsory && styles.toggleButtonTextActive,
                   ]}
                 >
-                  Compulsory
+                  {getUILabel('compulsory_button', 'Compulsory')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -254,28 +361,28 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
                     !isCompulsory && styles.toggleButtonTextActive,
                   ]}
                 >
-                  Optional
+                  {getUILabel('optional_button', 'Optional')}
                 </Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.selectionRow}>
               <View style={styles.selectionField}>
-                <Text style={styles.selectionLabel}>Min selection</Text>
+                <Text style={styles.selectionLabel}>{getUILabel('min_selection_label', 'Min selection')}</Text>
                 <CustomDropdown
                   value={minSelection}
                   onSelect={setMinSelection}
-                  placeholder="Select"
+                  placeholder={getUILabel('select_placeholder', 'Select')}
                   options={minSelectionOptions}
                 />
               </View>
 
               <View style={styles.selectionField}>
-                <Text style={styles.selectionLabel}>Max selection</Text>
+                <Text style={styles.selectionLabel}>{getUILabel('max_selection_label', 'Max selection')}</Text>
                 <CustomDropdown
                   value={maxSelection}
                   onSelect={setMaxSelection}
-                  placeholder="Select"
+                  placeholder={getUILabel('select_placeholder', 'Select')}
                   options={maxSelectionOptions}
                 />
               </View>
@@ -286,7 +393,7 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
         {/* Add Options Section */}
         <View style={styles.section}>
           <Text style={styles.label}>
-            Add Options<Text style={styles.asterisk}> *</Text>
+            {getUILabel('add_options_label', 'Add Options')}<Text style={styles.asterisk}> *</Text>
           </Text>
           <TouchableOpacity
             style={styles.addOptionsContainer}
@@ -309,9 +416,9 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
           >
             <View style={styles.addOptionsContent}>
               <Text style={styles.plusIcon}>+</Text>
-              <Text style={styles.addOptionsTitle}>Add Options To This Item</Text>
+              <Text style={styles.addOptionsTitle}>{getUILabel('add_options_to_item_title', 'Add Options To This Item')}</Text>
               <Text style={styles.addOptionsDescription}>
-                Select options to add and configure.
+                {getUILabel('add_options_description', 'Select options to add and configure.')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -336,7 +443,7 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
                         disabled={isRemoving}
                         activeOpacity={0.7}
                       >
-                        <Text style={styles.removeButtonText}>Remove</Text>
+                        <Text style={styles.removeButtonText}>{getUILabel('remove_button', 'Remove')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -350,15 +457,27 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
           </View>
         )}
 
-        {/* Go to Menu Screen Button */}
+        {/* Save and Go to Menu Screen Buttons */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            onPress={handleSaveSettings}
+            activeOpacity={0.7}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.saveButtonText}>{getUILabel('save_button', 'Save')}</Text>
+            )}
+          </TouchableOpacity>
+          {/* <TouchableOpacity
             style={styles.menuButton}
             onPress={onBack}
             activeOpacity={0.7}
           >
             <Text style={styles.menuButtonText}>Go to Menu Screen</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -495,10 +614,30 @@ const styles = StyleSheet.create({
   buttonContainer: {
     marginTop: 20,
     marginBottom: 10,
+    gap: 12,
+  },
+  saveButton: {
+    width: '100%',
+    backgroundColor: '#FF6E1A',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 46,
+  },
+  saveButtonText: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   menuButton: {
     width: '100%',
-    backgroundColor: '#FF6E1A',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -508,7 +647,7 @@ const styles = StyleSheet.create({
   menuButtonText: {
     fontFamily: Poppins.semiBold,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#000000',
   },
   linkedAddonsList: {
     marginTop: 8,

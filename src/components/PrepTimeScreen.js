@@ -37,23 +37,19 @@ const PrepTimeScreen = ({ onBack, configData }) => {
     try {
       setIsLoading(true);
       const url = `${API_BASE_URL}v1/settings`;
-      console.log('📡 [PrepTimeScreen] Fetching settings:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'GET',
       });
 
       const data = await response.json();
-      console.log('📥 [PrepTimeScreen] Settings Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         // Get prep time from backend - fully dynamic, no hardcoded default
         const defaultPrepTime = data.data?.default_prep_time_minutes;
         if (defaultPrepTime !== undefined && defaultPrepTime !== null) {
-          console.log('✅ [PrepTimeScreen] Prep time loaded from backend:', defaultPrepTime);
           setPrepTime(defaultPrepTime.toString());
         } else {
-          console.log('⚠️ [PrepTimeScreen] No prep time in backend response, using empty');
           setPrepTime('');
         }
       } else {
@@ -82,8 +78,6 @@ const PrepTimeScreen = ({ onBack, configData }) => {
       }
 
       const url = `${API_BASE_URL}v1/settings/prep-time`;
-      console.log('📡 [PrepTimeScreen] Updating prep time:', url);
-      console.log('📤 [PrepTimeScreen] Prep time minutes:', prepTimeMinutes);
 
       const response = await fetchWithAuth(url, {
         method: 'PATCH',
@@ -93,7 +87,6 @@ const PrepTimeScreen = ({ onBack, configData }) => {
       });
 
       const data = await response.json();
-      console.log('📥 [PrepTimeScreen] Update Prep Time Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         const successMessage = getUILabel('prep_time_updated_success', 'Prep time updated successfully');

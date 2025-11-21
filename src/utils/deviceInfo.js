@@ -21,9 +21,7 @@ export const getDeviceId = async () => {
       
       // Store it for future use
       await AsyncStorage.setItem(DEVICE_ID_KEY, deviceId);
-      console.log('📱 [DeviceInfo] Generated new device ID:', deviceId);
     } else {
-      console.log('📱 [DeviceInfo] Using existing device ID:', deviceId);
     }
     
     return deviceId;

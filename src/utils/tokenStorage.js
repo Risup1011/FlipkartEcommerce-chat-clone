@@ -10,7 +10,6 @@ export const REFRESH_TOKEN_KEY = '@Kamai24:refreshToken';
 export const storeAccessToken = async (token) => {
   try {
     await AsyncStorage.setItem(ACCESS_TOKEN_KEY, token);
-    console.log('💾 [TokenStorage] Access token stored');
     return true;
   } catch (error) {
     console.error('❌ [TokenStorage] Error storing access token:', error);
@@ -24,7 +23,6 @@ export const storeAccessToken = async (token) => {
 export const storeRefreshToken = async (token) => {
   try {
     await AsyncStorage.setItem(REFRESH_TOKEN_KEY, token);
-    console.log('💾 [TokenStorage] Refresh token stored');
     return true;
   } catch (error) {
     console.error('❌ [TokenStorage] Error storing refresh token:', error);
@@ -82,7 +80,6 @@ export const getTokens = async () => {
 export const removeAccessToken = async () => {
   try {
     await AsyncStorage.removeItem(ACCESS_TOKEN_KEY);
-    console.log('🗑️ [TokenStorage] Access token removed');
     return true;
   } catch (error) {
     console.error('❌ [TokenStorage] Error removing access token:', error);
@@ -96,7 +93,6 @@ export const removeAccessToken = async () => {
 export const removeRefreshToken = async () => {
   try {
     await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
-    console.log('🗑️ [TokenStorage] Refresh token removed');
     return true;
   } catch (error) {
     console.error('❌ [TokenStorage] Error removing refresh token:', error);

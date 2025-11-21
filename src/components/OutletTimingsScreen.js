@@ -70,19 +70,15 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
     try {
       setIsLoading(true);
       const url = `${API_BASE_URL}v1/outlet/timings`;
-      console.log('📡 [OutletTimingsScreen] Fetching outlet timings:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'GET',
       });
 
       const data = await response.json();
-      console.log('📥 [OutletTimingsScreen] Outlet Timings Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         setTimings(data.data);
-        console.log('✅ [OutletTimingsScreen] Timings loaded from backend');
-        console.log('📋 [OutletTimingsScreen] Days from backend:', data.data?.timings?.map(t => t.day) || []);
       } else {
         console.error('❌ [OutletTimingsScreen] Failed to fetch timings:', data.message);
         const errorMessage = data.message || getUILabel('load_timings_error', 'Failed to load outlet timings');
@@ -107,7 +103,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
   };
 
   const handleEdit = (day) => {
-    console.log('📡 [OutletTimingsScreen] Edit clicked for:', day);
     const dayTiming = getDayTiming(day);
     
     // Get default slot times from config or use fallback
@@ -212,8 +207,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
     setIsSaving(true);
     try {
       const url = `${API_BASE_URL}v1/outlet/timings`;
-      console.log('📡 [OutletTimingsScreen] Updating outlet timings:', url);
-      console.log('📤 [OutletTimingsScreen] Request body:', JSON.stringify({
         day: editingDay,
         is_open: isOpen,
         slots: isOpen ? slots : [],
@@ -229,7 +222,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
       });
 
       const data = await response.json();
-      console.log('📥 [OutletTimingsScreen] Update Timings Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         const successMessage = getUILabel('timings_updated_success', `Timings updated successfully for ${getDayLabel(editingDay)}`);

@@ -24,14 +24,12 @@ const AddOnsScreen = ({ onCreateAddon, onRefresh }) => {
     setIsLoadingAddons(true);
     try {
       const url = `${API_BASE_URL}v1/catalog/addons`;
-      console.log('📡 [AddOnsScreen] Fetching add-ons from:', url);
       
       const response = await fetchWithAuth(url, {
         method: 'GET',
       });
 
       const data = await response.json();
-      console.log('📥 [AddOnsScreen] Add-ons API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.code === 201) && data.status === 'success') {
         const mappedAddons = (data.data || []).map((addon) => ({
@@ -61,7 +59,6 @@ const AddOnsScreen = ({ onCreateAddon, onRefresh }) => {
         });
         
         setAddons(sortedAddons);
-        console.log(`✅ [AddOnsScreen] Mapped and sorted ${sortedAddons.length} add-ons (newest first)`);
       } else {
         const errorMessage = data.message || data.error || 'Failed to fetch add-ons';
         console.error('❌ [AddOnsScreen] Failed to fetch add-ons:', errorMessage);

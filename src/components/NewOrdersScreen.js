@@ -22,7 +22,6 @@ let Sound = null;
 try {
   Sound = require('react-native-sound').default;
 } catch (e) {
-  console.log('📦 react-native-sound not linked - will use vibration only');
 }
 
 const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyOrder }) => {
@@ -48,7 +47,6 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
   }, [visible, orders.length]);
 
   const playNotificationSound = () => {
-    console.log('🔔 Playing notification sound for new order');
     
     // Always play vibration as companion
     playVibration();
@@ -57,18 +55,14 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
     try {
       const { NativeModules } = require('react-native');
       if (NativeModules.SoundModule) {
-        console.log('🎵 Using native sound module for system notification sound');
         NativeModules.SoundModule.playNotificationSound();
         return; // Exit early if native module works
       }
     } catch (nativeError) {
-      console.log('📦 Native sound module not available, trying react-native-sound');
     }
     
     // Fallback to react-native-sound if native module not available
     if (!Sound) {
-      console.log('📦 react-native-sound not available - using vibration only');
-      console.log('💡 To enable sound: Rebuild the app (npm run android)');
       return;
     }
     
@@ -82,7 +76,6 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
         Platform.OS === 'android' ? Sound.MAIN_BUNDLE : Sound.MAIN_BUNDLE,
         (error) => {
           if (error) {
-            console.log('📦 Custom sound file not found, trying system default');
             // Try system default notification sound
             playSystemDefaultSound();
             return;
@@ -92,7 +85,6 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
           notificationSound.setVolume(1.0);
           notificationSound.play((success) => {
             if (success) {
-              console.log('✅ Custom notification sound played successfully');
             } else {
               console.warn('⚠️ Custom sound playback failed, using system default');
               playSystemDefaultSound();
@@ -122,18 +114,15 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
           Sound.MAIN_BUNDLE,
           (error) => {
             if (error) {
-              console.log('📳 System sound not accessible, vibration is being used');
             } else {
               systemSound.setVolume(1.0);
               systemSound.play();
               systemSound.release();
-              console.log('✅ System notification sound played');
             }
           }
         );
       } else {
         // iOS: System sounds are handled differently
-        console.log('📳 iOS: Vibration used (add custom sound file for audio)');
       }
     } catch (error) {
       console.warn('⚠️ System sound error:', error.message || error);
@@ -147,7 +136,6 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
       if (Vibration && typeof Vibration.vibrate === 'function') {
         // Vibrate pattern: vibrate for 200ms, pause 100ms, vibrate 200ms
         Vibration.vibrate([200, 100, 200]);
-        console.log('✅ Vibration triggered');
       }
     } catch (vibrateError) {
       console.warn('⚠️ Vibration not available:', vibrateError.message || vibrateError);

@@ -14,7 +14,6 @@ export const refreshAccessToken = async () => {
       return null;
     }
 
-    console.log('🔄 [TokenRefresh] Attempting to refresh access token...');
     
     const response = await fetch(`${API_BASE_URL}v1/auth/refresh-token`, {
       method: 'POST',
@@ -28,16 +27,12 @@ export const refreshAccessToken = async () => {
 
     const data = await response.json();
     
-    console.log('📥 [TokenRefresh] Refresh token response status:', response.status);
-    console.log('📥 [TokenRefresh] Refresh token response:', JSON.stringify(data, null, 2));
 
     if (response.ok && data.code === 200 && data.status === 'success') {
       const newAccessToken = data.data?.access_token;
       const expiresIn = data.data?.expires_in; // in seconds
       
       if (newAccessToken) {
-        console.log('✅ [TokenRefresh] Access token refreshed successfully');
-        console.log('✅ [TokenRefresh] New token expires in:', expiresIn, 'seconds');
         
         // Store the new access token (refresh token remains the same)
         await storeTokens(newAccessToken, refreshToken);

@@ -23,7 +23,6 @@ export const fetchWithAuth = async (url, options = {}, includeAuth = true) => {
     // For FormData requests, don't set Content-Type - React Native will set it automatically with boundary
     if (isFormData && headers['Content-Type']) {
       delete headers['Content-Type'];
-      console.log('📡 [ApiHelpers] FormData detected - Content-Type removed (will be auto-set by RN)');
     }
     options.headers = {
       ...headers,
@@ -31,18 +30,6 @@ export const fetchWithAuth = async (url, options = {}, includeAuth = true) => {
     };
   }
   
-  // Log request details for file uploads
-  if (isFormData) {
-    console.log('📡 [ApiHelpers] ========================================');
-    console.log('📡 [ApiHelpers] SENDING FILE UPLOAD REQUEST:');
-    console.log(`📡 [ApiHelpers] - URL: ${url}`);
-    console.log(`📡 [ApiHelpers] - Method: ${options.method || 'GET'}`);
-    console.log(`📡 [ApiHelpers] - Body Type: FormData`);
-    console.log(`📡 [ApiHelpers] - Headers:`, JSON.stringify(options.headers, null, 2));
-    console.log(`📡 [ApiHelpers] - Authorization: ${options.headers?.['Authorization'] ? 'Present ✅' : 'Missing ❌'}`);
-    console.log(`📡 [ApiHelpers] - Content-Type: ${options.headers?.['Content-Type'] || 'Not set (auto-set by RN) ✅'}`);
-    console.log('📡 [ApiHelpers] ========================================');
-  }
   
   let response = await fetch(url, options);
   
@@ -61,8 +48,6 @@ export const fetchWithAuth = async (url, options = {}, includeAuth = true) => {
     refreshPromise = null;
     
     if (refreshResult && refreshResult.accessToken) {
-      console.log('✅ [ApiHelpers] Token refreshed, retrying original request...');
-      
       // Retry the request with new token
       const newHeaders = await getApiHeaders(true);
       // For FormData requests, don't set Content-Type
@@ -79,7 +64,6 @@ export const fetchWithAuth = async (url, options = {}, includeAuth = true) => {
       };
       
       response = await fetch(url, retryOptions);
-      console.log('🔄 [ApiHelpers] Retry response status:', response.status);
     } else {
       console.error('❌ [ApiHelpers] Failed to refresh token - user needs to re-authenticate');
       // Token refresh failed - tokens cleared, user needs to login again
@@ -104,7 +88,6 @@ export const getApiHeaders = async (includeAuth = true) => {
     const accessToken = await getAccessToken();
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;
-      console.log('🔐 [ApiHelpers] Authorization header added to request');
     } else {
       console.warn('⚠️ [ApiHelpers] No access token available, request will be unauthenticated');
     }
@@ -132,9 +115,6 @@ export const authenticatedFetch = async (url, options = {}, includeAuth = true, 
     },
   };
 
-  console.log('📡 [ApiHelpers] Making authenticated request to:', url);
-  console.log('📡 [ApiHelpers] Headers:', JSON.stringify(fetchOptions.headers, null, 2));
-  
   let response = await fetch(url, fetchOptions);
   
   // Handle 401 Unauthorized - token expired, try to refresh
@@ -144,8 +124,6 @@ export const authenticatedFetch = async (url, options = {}, includeAuth = true, 
     const refreshResult = await refreshAccessToken();
     
     if (refreshResult && refreshResult.accessToken) {
-      console.log('✅ [ApiHelpers] Token refreshed, retrying original request...');
-      
       // Retry the request with new token
       const newHeaders = await getApiHeaders(includeAuth);
       const retryOptions = {
@@ -157,7 +135,6 @@ export const authenticatedFetch = async (url, options = {}, includeAuth = true, 
       };
       
       response = await fetch(url, retryOptions);
-      console.log('🔄 [ApiHelpers] Retry response status:', response.status);
     } else {
       console.error('❌ [ApiHelpers] Failed to refresh token - user needs to re-authenticate');
       // Token refresh failed - tokens cleared, user needs to login again

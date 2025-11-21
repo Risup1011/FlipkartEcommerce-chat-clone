@@ -37,28 +37,45 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     min_selection: 1,
     max_selection: 1,
   }); // Store variant settings from existing variant or config
+  // For CUSTOM variants, start with empty string if new, otherwise use variantTitle
+  const [editableVariantTitle, setEditableVariantTitle] = useState(
+    variantType === 'CUSTOM' ? '' : variantTitle
+  ); // Editable title for CUSTOM variants
 
   const itemTypeOptions = ['VEG', 'NON_VEG'];
 
+  // Get UI labels from config with fallbacks
+  const getUILabel = (key, fallback) => {
+    return configData?.variant_screen_labels?.[key] || 
+           configData?.ui_labels?.[key] || 
+           fallback;
+  };
+
   // Prefill variant data if editing existing variant
   useEffect(() => {
-    console.log('🔍 [AddQuantityScreen] Prefill check - itemData:', itemData ? JSON.stringify(itemData, null, 2) : 'null');
-    console.log('🔍 [AddQuantityScreen] Prefill check - variantType:', variantType);
     
     if (itemData && itemData.variants && Array.isArray(itemData.variants)) {
-      console.log('🔍 [AddQuantityScreen] Variants array found:', itemData.variants.length, 'variants');
-      console.log('🔍 [AddQuantityScreen] Variants:', JSON.stringify(itemData.variants, null, 2));
       
       // Find variant that matches the current variantType
+      // For CUSTOM variants, also check custom_variant_name
       const existingVariant = itemData.variants.find(
-        (variant) => variant.variant_type === variantType
+        (variant) => {
+          if (variantType === 'CUSTOM') {
+            return variant.variant_type === 'CUSTOM';
+          }
+          return variant.variant_type === variantType;
+        }
       );
       
-      console.log('🔍 [AddQuantityScreen] Matching variant found:', existingVariant ? 'YES' : 'NO');
 
       if (existingVariant && existingVariant.options && existingVariant.options.length > 0) {
-        console.log('📋 [AddQuantityScreen] Found existing variant:', existingVariant);
         setExistingVariantId(existingVariant.variant_id || existingVariant.id || null);
+        
+        // For CUSTOM variants, use custom_variant_name or variant_group_name as editable title
+        if (variantType === 'CUSTOM' && existingVariant) {
+          const customTitle = existingVariant.custom_variant_name || existingVariant.variant_group_name || variantTitle;
+          setEditableVariantTitle(customTitle);
+        }
         
         // Store variant settings from existing variant (backend dynamic)
         setVariantSettings({
@@ -87,17 +104,19 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         }
 
         setVariantOptions(prefilledOptions);
-        console.log('✅ [AddQuantityScreen] Prefilled variant options:', prefilledOptions);
         
         const settingsFromBackend = {
           is_mandatory: existingVariant.is_mandatory !== undefined ? existingVariant.is_mandatory : true,
           min_selection: existingVariant.min_selection !== undefined ? existingVariant.min_selection : 1,
           max_selection: existingVariant.max_selection !== undefined ? existingVariant.max_selection : 1,
         };
-        console.log('✅ [AddQuantityScreen] Variant settings from backend:', settingsFromBackend);
       } else {
         // No existing variant found, reset to default
         setExistingVariantId(null);
+        // For CUSTOM variants, clear the title so user can type directly
+        if (variantType === 'CUSTOM') {
+          setEditableVariantTitle('');
+        }
         // Use defaults from config API if available, otherwise use sensible defaults
         const defaultSettings = configData?.variant_config?.default_settings || {};
         setVariantSettings({
@@ -119,6 +138,10 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     } else {
       // No itemData or no variants array, reset to default
       setExistingVariantId(null);
+      // For CUSTOM variants, clear the title so user can type directly
+      if (variantType === 'CUSTOM') {
+        setEditableVariantTitle('');
+      }
       // Use defaults from config API if available
       const defaultSettings = configData?.variant_config?.default_settings || {};
       setVariantSettings({
@@ -163,14 +186,18 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     const filtered = variantOptions.filter((opt) => opt.id !== id);
     // Ensure at least one option remains
     if (filtered.length === 0) {
-      showToast('At least one variant option is required', 'error');
+      const errorMsg = getUILabel('variant_at_least_one_option', 'At least one variant option is required');
+      showToast(errorMsg, 'error');
       return;
     }
 
-    // If we removed the default, make the first one default
-    const hadDefault = variantOptions.find((opt) => opt.id === id)?.isDefault;
-    if (hadDefault && filtered.length > 0) {
+    // Ensure first option is always default
+    if (filtered.length > 0) {
       filtered[0].isDefault = true;
+      // Remove default from others
+      filtered.forEach((opt, index) => {
+        opt.isDefault = index === 0;
+      });
     }
 
     // Store original state for potential rollback
@@ -196,9 +223,11 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       
       // Prepare API payload with updated options (without the removed one)
       // Use variant settings from state (which came from existing variant or config)
+      const titleToUse = variantType === 'CUSTOM' ? editableVariantTitle : variantTitle;
       const apiPayload = {
         variant_type: variantType, // Required by API
-        variant_group_name: variantTitle,
+        variant_group_name: titleToUse.trim(),
+        ...(variantType === 'CUSTOM' && { custom_variant_name: editableVariantTitle.trim() }),
         is_mandatory: variantSettings.is_mandatory, // From existing variant or config API
         min_selection: variantSettings.min_selection, // From existing variant or config API
         max_selection: variantSettings.max_selection, // From existing variant or config API
@@ -210,8 +239,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         })),
       };
 
-      console.log('📡 [AddQuantityScreen] Updating variant after option removal:', url);
-      console.log('📤 [AddQuantityScreen] Updated Variant Data:', JSON.stringify(apiPayload, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: 'PUT',
@@ -219,32 +246,24 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       });
 
       const data = await response.json();
-      console.log('📥 [AddQuantityScreen] Update Variant API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
-        console.log('✅ [AddQuantityScreen] Variant updated successfully after option removal');
         return true; // Success
       } else {
         const errorMessage = data.message || data.error || 'Failed to update variant';
         console.error('❌ [AddQuantityScreen] Failed to update variant:', errorMessage);
-        showToast('Failed to remove option. Please try again.', 'error');
+        const errorMsg = getUILabel('variant_remove_option_error', 'Failed to remove option. Please try again.');
+        showToast(errorMsg, 'error');
         return false; // Failure
       }
     } catch (error) {
       console.error('❌ [AddQuantityScreen] Error updating variant:', error);
-      showToast('Failed to remove option. Please try again.', 'error');
+      const errorMsg = getUILabel('variant_remove_option_error', 'Failed to remove option. Please try again.');
+      showToast(errorMsg, 'error');
       return false; // Failure
     }
   };
 
-  const handleSetDefault = (id) => {
-    setVariantOptions(
-      variantOptions.map((opt) => ({
-        ...opt,
-        isDefault: opt.id === id,
-      }))
-    );
-  };
 
   const handleUpdateOption = (id, field, value) => {
     setVariantOptions(
@@ -258,7 +277,18 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     // Validation
     const hasEmptyNames = variantOptions.some((opt) => !opt.name.trim());
     if (hasEmptyNames) {
-      showToast('Please enter a name for all variant options', 'error');
+      const errorMsg = getUILabel('variant_option_name_required', 'Please enter a name for all variant options');
+      showToast(errorMsg, 'error');
+      return;
+    }
+
+    // Check for empty additional price fields
+    const hasEmptyAdditionalPrice = variantOptions.some((opt) => {
+      return !opt.additionalPrice || opt.additionalPrice.trim() === '';
+    });
+    if (hasEmptyAdditionalPrice) {
+      const errorMsg = getUILabel('additional_price_required', 'Additional price field is empty. Please enter an amount.');
+      showToast(errorMsg, 'error');
       return;
     }
 
@@ -275,19 +305,23 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       );
     });
     if (hasInvalidPrices) {
-      showToast('Please enter valid prices (numbers >= 0) for all variant options', 'error');
+      const errorMsg = getUILabel('variant_price_required', 'Please enter valid prices (numbers >= 0) for all variant options');
+      showToast(errorMsg, 'error');
       return;
     }
 
     // Check if itemData and itemId are available
     if (!itemData || !itemData.id) {
-      showToast('Item data is missing. Please save the item first.', 'error');
+      const errorMsg = getUILabel('item_data_missing', 'Item data is missing. Please save the item first.');
+      showToast(errorMsg, 'error');
       return;
     }
 
-    // Validate variant title
-    if (!variantTitle || variantTitle.trim() === '') {
-      showToast('Variant title is required', 'error');
+    // Validate variant title - use editable title for CUSTOM variants
+    const titleToUse = variantType === 'CUSTOM' ? editableVariantTitle : variantTitle;
+    if (!titleToUse || titleToUse.trim() === '') {
+      const errorMsg = getUILabel('variant_title_required', 'Variant title is required');
+      showToast(errorMsg, 'error');
       return;
     }
 
@@ -332,22 +366,23 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
 
       // Ensure we have at least one valid option
       if (validOptions.length === 0) {
-        showToast('At least one valid variant option is required', 'error');
+        const errorMsg = getUILabel('variant_at_least_one_option', 'At least one valid variant option is required');
+        showToast(errorMsg, 'error');
         setIsSaving(false);
         return;
       }
 
+      // For CUSTOM variants, use custom_variant_name field
       const apiPayload = {
         variant_type: variantType, // Required by API
-        variant_group_name: variantTitle.trim(),
+        variant_group_name: variantType === 'CUSTOM' ? editableVariantTitle.trim() : variantTitle.trim(),
+        ...(variantType === 'CUSTOM' && { custom_variant_name: editableVariantTitle.trim() }),
         is_mandatory: variantSettings.is_mandatory, // From existing variant or config API
         min_selection: variantSettings.min_selection, // From existing variant or config API
         max_selection: variantSettings.max_selection, // From existing variant or config API
         options: validOptions,
       };
 
-      console.log(`📡 [AddQuantityScreen] ${isUpdating ? 'Updating' : 'Creating'} variant:`, url);
-      console.log('📤 [AddQuantityScreen] Variant Data:', JSON.stringify(apiPayload, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: isUpdating ? 'PUT' : 'POST',
@@ -355,18 +390,19 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       });
 
       const data = await response.json();
-      console.log('📥 [AddQuantityScreen] Create Variant API Response:', JSON.stringify(data, null, 2));
-      console.log('📥 [AddQuantityScreen] Response Status:', response.status);
-      console.log('📥 [AddQuantityScreen] Response OK:', response.ok);
 
       if (response.ok && (data.code === 200 || data.code === 201) && data.status === 'success') {
-        showToast(`Variant ${isUpdating ? 'updated' : 'created'} successfully`, 'success');
+        const successMsg = isUpdating 
+          ? getUILabel('variant_updated_success', 'Variant updated successfully')
+          : getUILabel('variant_created_success', 'Variant created successfully');
+        showToast(successMsg, 'success');
         
         // Call onSave callback with variant data if provided
         if (onSave) {
+          const titleToUse = variantType === 'CUSTOM' ? editableVariantTitle : variantTitle;
           const variantData = {
             variantType,
-            variantTitle,
+            variantTitle: titleToUse,
             options: variantOptions.map((opt) => ({
               name: opt.name.trim(),
               item_type: opt.itemType,
@@ -398,7 +434,8 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       }
     } catch (error) {
       console.error('❌ [AddQuantityScreen] Error creating variant:', error);
-      showToast('Failed to create variant. Please try again.', 'error');
+      const errorMsg = getUILabel('variant_create_error', 'Failed to create variant. Please try again.');
+      showToast(errorMsg, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -407,26 +444,30 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
   const handleDelete = async () => {
     // Only allow deletion if we're editing an existing variant
     if (!existingVariantId) {
-      showToast('No variant to delete. This is a new variant.', 'error');
+      const errorMsg = getUILabel('variant_no_delete_new', 'No variant to delete. This is a new variant.');
+      showToast(errorMsg, 'error');
       return;
     }
 
     if (!itemData || !itemData.id) {
-      showToast('Item data is missing', 'error');
+      const errorMsg = getUILabel('item_data_missing', 'Item data is missing');
+      showToast(errorMsg, 'error');
       return;
     }
 
     // Show confirmation dialog
+    const deleteTitle = getUILabel('delete_variant_title', 'Delete Variant');
+    const deleteMessage = getUILabel('delete_variant_message', `Are you sure you want to delete the "${variantTitle}" variant? This action cannot be undone.`);
     Alert.alert(
-      'Delete Variant',
-      `Are you sure you want to delete the "${variantTitle}" variant? This action cannot be undone.`,
+      deleteTitle,
+      deleteMessage,
       [
         {
-          text: 'Cancel',
+          text: getUILabel('cancel_button', 'Cancel'),
           style: 'cancel',
         },
         {
-          text: 'Delete',
+          text: getUILabel('delete_button', 'Delete'),
           style: 'destructive',
           onPress: deleteVariant,
         },
@@ -440,17 +481,16 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       const itemId = itemData.id;
       const url = `${API_BASE_URL}v1/catalog/items/${itemId}/variants/${existingVariantId}`;
       
-      console.log('📡 [AddQuantityScreen] Deleting variant:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'DELETE',
       });
 
       const data = await response.json();
-      console.log('📥 [AddQuantityScreen] Delete Variant API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
-        showToast('Variant deleted successfully', 'success');
+        const successMsg = getUILabel('variant_deleted_success', 'Variant deleted successfully');
+        showToast(successMsg, 'success');
         // Call onDelete callback to refresh categories before navigating back
         if (onDeleteCallback) {
           await onDeleteCallback();
@@ -463,7 +503,8 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       }
     } catch (error) {
       console.error('❌ [AddQuantityScreen] Error deleting variant:', error);
-      showToast('Failed to delete variant. Please try again.', 'error');
+      const errorMsg = getUILabel('variant_delete_error', 'Failed to delete variant. Please try again.');
+      showToast(errorMsg, 'error');
     } finally {
       setIsDeleting(false);
     }
@@ -482,35 +523,33 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       >
         {/* Variant Group Title */}
         <View style={styles.section}>
-          <Text style={styles.label}>Title of the variant group</Text>
-          <Text style={styles.variantTitle}>{variantTitle}</Text>
+          <Text style={styles.label}>
+            {getUILabel('variant_group_title_label', 'Title of the variant group')}{variantType === 'CUSTOM' && <Text style={styles.asterisk}> *</Text>}
+          </Text>
+          {variantType === 'CUSTOM' ? (
+            <TextInput
+              style={styles.variantTitleInput}
+              placeholder={getUILabel('variant_group_title_placeholder', 'Enter variant group title')}
+              placeholderTextColor="#999"
+              value={editableVariantTitle}
+              onChangeText={setEditableVariantTitle}
+            />
+          ) : (
+            <Text style={styles.variantTitle}>{variantTitle}</Text>
+          )}
         </View>
 
         {/* Add Variant Options */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Add variant options</Text>
+          <Text style={styles.sectionTitle}>{getUILabel('add_variant_options_label', 'Add variant options')}</Text>
 
           {variantOptions.map((option, index) => (
             <View key={option.id} style={styles.optionContainer}>
-              {/* Radio Button and Option Name */}
+              {/* Option Name */}
               <View style={styles.optionHeader}>
-                <TouchableOpacity
-                  style={styles.radioButton}
-                  onPress={() => handleSetDefault(option.id)}
-                  activeOpacity={0.7}
-                >
-                  <View
-                    style={[
-                      styles.radioCircle,
-                      option.isDefault && styles.radioCircleSelected,
-                    ]}
-                  >
-                    {option.isDefault && <View style={styles.radioInner} />}
-                  </View>
-                </TouchableOpacity>
                 <TextInput
                   style={styles.optionNameInput}
-                  placeholder="Option name"
+                  placeholder={getUILabel('option_name_placeholder', 'Option name')}
                   placeholderTextColor="#999"
                   value={option.name}
                   onChangeText={(text) =>
@@ -526,7 +565,7 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
                   onSelect={(value) =>
                     handleUpdateOption(option.id, 'itemType', value)
                   }
-                  placeholder="Select Item Type"
+                  placeholder={getUILabel('select_item_type_placeholder', 'Select Item Type')}
                   options={itemTypeOptions}
                 />
               </View>
@@ -534,7 +573,7 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
               {/* Price Fields */}
               <View style={styles.priceRow}>
                 <View style={styles.priceField}>
-                  <Text style={styles.priceLabel}>Item Price</Text>
+                  <Text style={styles.priceLabel}>{getUILabel('item_price_label', 'Item Price')}</Text>
                   <View style={styles.priceInputContainer}>
                     <Text style={styles.currencySymbol}>₹</Text>
                     <TextInput
@@ -553,7 +592,7 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
                 <Text style={styles.plusSign}>+</Text>
 
                 <View style={styles.priceField}>
-                  <Text style={styles.priceLabel}>Additional Price</Text>
+                  <Text style={styles.priceLabel}>{getUILabel('additional_price_label', 'Additional Price')}</Text>
                   <View style={styles.priceInputContainer}>
                     <Text style={styles.currencySymbol}>₹</Text>
                     <TextInput
@@ -574,28 +613,21 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
               <View style={styles.finalPriceContainer}>
                 <Text style={styles.equalsSign}>=</Text>
                 <View style={styles.finalPriceField}>
-                  <Text style={styles.priceLabel}>Final Price</Text>
+                  <Text style={styles.priceLabel}>{getUILabel('final_price_label', 'Final Price')}</Text>
                   <Text style={styles.finalPriceValue}>
                     ₹{calculateFinalPrice(option.itemPrice, option.additionalPrice).toFixed(2)}
                   </Text>
                 </View>
               </View>
 
-              {/* Default Option Label */}
-              {option.isDefault && (
-                <Text style={styles.defaultLabel}>(Default Option)</Text>
-              )}
-
               {/* Remove Button */}
-              {!option.isDefault && (
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => handleRemoveOption(option.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.removeButtonText}>REMOVE</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => handleRemoveOption(option.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.removeButtonText}>{getUILabel('remove_button', 'REMOVE')}</Text>
+              </TouchableOpacity>
             </View>
           ))}
 
@@ -605,7 +637,7 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
             onPress={handleAddOption}
             activeOpacity={0.7}
           >
-            <Text style={styles.addMoreButtonText}>ADD MORE OPTION</Text>
+            <Text style={styles.addMoreButtonText}>{getUILabel('add_more_option_button', 'ADD MORE OPTION')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -620,7 +652,7 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
             {isDeleting ? (
               <ActivityIndicator color="#000000" />
             ) : (
-              <Text style={styles.deleteButtonText}>Delete</Text>
+              <Text style={styles.deleteButtonText}>{getUILabel('delete_button', 'Delete')}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -632,7 +664,7 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
             {isSaving ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={styles.saveButtonText}>{getUILabel('save_button', 'Save')}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -672,6 +704,21 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 8,
   },
+  variantTitleInput: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontFamily: Poppins.semiBold,
+    fontSize: 20,
+    color: '#000000',
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  asterisk: {
+    color: '#FF0000',
+  },
   sectionTitle: {
     fontFamily: Poppins.semiBold,
     fontSize: 18,
@@ -687,30 +734,7 @@ const styles = StyleSheet.create({
     borderColor: '#E0E0E0',
   },
   optionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 12,
-  },
-  radioButton: {
-    marginRight: 12,
-  },
-  radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#666666',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioCircleSelected: {
-    borderColor: '#FF6E1A',
-  },
-  radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF6E1A',
   },
   optionNameInput: {
     flex: 1,
@@ -790,13 +814,6 @@ const styles = StyleSheet.create({
     fontFamily: Poppins.semiBold,
     fontSize: 16,
     color: '#000000',
-  },
-  defaultLabel: {
-    fontFamily: Poppins.regular,
-    fontSize: 12,
-    color: '#666666',
-    fontStyle: 'italic',
-    marginTop: 4,
   },
   removeButton: {
     alignSelf: 'flex-end',
