@@ -218,13 +218,8 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
         } else {
         }
         
-          otp_id: data.data?.otp_id,
-          expires_in: data.data?.expires_in,
-          otp: otpValue,
-        });
-        
         // Navigate to verification code screen with OTP data
-      if (onNavigateToVerification) {
+        if (onNavigateToVerification) {
           onNavigateToVerification(fullPhoneNumber, {
             otp_id: data.data?.otp_id,
             expires_in: data.data?.expires_in,

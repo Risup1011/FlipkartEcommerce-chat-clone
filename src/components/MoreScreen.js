@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,10 +17,21 @@ import { API_BASE_URL } from '../config';
 import { clearTokens } from '../utils/tokenStorage';
 import PowerToggle from './PowerToggle';
 
+// Module-level variable to persist across component unmounts
+let hasLoadedMoreDataOnce = false;
+let cachedMoreData = null;
+
 const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configData: configDataProp }) => {
   const { showToast } = useToast();
-  const [moreData, setMoreData] = useState(null);
-  const [isLoadingMoreData, setIsLoadingMoreData] = useState(true);
+  const [moreData, setMoreData] = useState(() => {
+    // Initialize with cached data if available
+    return cachedMoreData;
+  });
+  const hasLoadedOnceRef = useRef(hasLoadedMoreDataOnce); // Track if we've loaded data at least once
+  const [isLoadingMoreData, setIsLoadingMoreData] = useState(() => {
+    // Only show loading if we don't have data yet (first time)
+    return false; // Will be set to true only if needed
+  });
   const [isTogglingOrders, setIsTogglingOrders] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [configData, setConfigData] = useState(configDataProp || null);
@@ -31,6 +42,12 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
     // If configData is provided as prop, use it and skip fetching
     if (configDataProp) {
       setConfigData(configDataProp);
+      setIsLoadingConfigData(false);
+      return;
+    }
+
+    // If configData already exists in state, skip fetching
+    if (configData) {
       setIsLoadingConfigData(false);
       return;
     }
@@ -60,13 +77,30 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
     };
 
     fetchConfigData();
-  }, [configDataProp]);
+  }, [configDataProp, configData]);
 
   // Fetch more screen data from backend
   useEffect(() => {
+    // Check if we already have cached data (from previous navigation)
+    if (cachedMoreData) {
+      setMoreData(cachedMoreData);
+      setIsLoadingMoreData(false);
+      hasLoadedOnceRef.current = true;
+      hasLoadedMoreDataOnce = true;
+      return;
+    }
+
+    // If we've already loaded once, don't show loader or fetch again
+    if (hasLoadedMoreDataOnce || hasLoadedOnceRef.current) {
+      setIsLoadingMoreData(false);
+      return;
+    }
+
+    // Set loading to true only if we don't have data yet (first time)
+    setIsLoadingMoreData(true);
+
     const fetchMoreData = async () => {
       try {
-        setIsLoadingMoreData(true);
         const url = `${API_BASE_URL}v1/more`;
         
         const response = await fetchWithAuth(url, {
@@ -76,7 +110,11 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
         const data = await response.json();
 
         if (response.ok && data.code === 200 && data.status === 'success') {
+          // Cache the data at module level
+          cachedMoreData = data.data;
+          hasLoadedMoreDataOnce = true;
           setMoreData(data.data);
+          hasLoadedOnceRef.current = true;
         } else {
           console.error('❌ [MoreScreen] Failed to fetch more data:', data.message);
           showToast(data.message || 'Failed to load more screen data', 'error');
@@ -90,7 +128,8 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
     };
 
     fetchMoreData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   // Fetch settings to get current receiving orders status (only once when moreData is loaded)
   useEffect(() => {
@@ -318,8 +357,6 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
       
       // Get dynamic success message
       const successMessage = getUILabel('logout_success_message', 'Logged out successfully');
-        configData?.logout_labels?.logout_success_message ? 'BACKEND' : 
-        configData?.ui_labels?.logout_success_message ? 'UI_LABELS' : 'FALLBACK');
       
       // Show toast
       showToast(successMessage, 'success');
@@ -422,6 +459,8 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
     }
   }, [moreData]);
 
+  console.log('-----', moreData)
+
   // Show loading state
   if (isLoadingMoreData || isLoadingConfigData) {
     return (
@@ -438,21 +477,23 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
             </View>
             <View style={styles.headerTextContainer}>
               <Text style={styles.restaurantName}>
-                {configData?.partner_info?.business_name || (!isLoadingConfigData ? 'Restaurant Name' : '')}
+                {configData?.partner_info?.business_name || ''}
               </Text>
-              <View style={styles.statusContainer}>
-                <Text style={styles.onlineText}>
-                  {configData?.partner_info?.online_status || (!isLoadingConfigData ? 'Online' : '')}
-                </Text>
-                {!isLoadingConfigData && (
-                  <>
-                    <Text style={styles.statusDot}>•</Text>
-                    <Text style={styles.closingText}>
-                      {configData?.partner_info?.closing_info || 'Closes at 12:00 am, Tomorrow'}
-                    </Text>
-                  </>
-                )}
-              </View>
+              {configData?.partner_info && (
+                <View style={styles.statusContainer}>
+                  <Text style={styles.onlineText}>
+                    {configData.partner_info.online_status || ''}
+                  </Text>
+                  {configData.partner_info.online_status && configData.partner_info.closing_info && (
+                    <>
+                      <Text style={styles.statusDot}>•</Text>
+                      <Text style={styles.closingText}>
+                        {configData.partner_info.closing_info}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -464,7 +505,6 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
       </SafeAreaView>
     );
   }
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Header Section - Same style as OrdersScreen/MenuScreen */}
@@ -479,17 +519,23 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
           </View>
           <View style={styles.headerTextContainer}>
             <Text style={styles.restaurantName}>
-              {configData?.partner_info?.business_name || 'Restaurant Name'}
+              {configData?.partner_info?.business_name || ''}
             </Text>
-            <View style={styles.statusContainer}>
-              <Text style={styles.onlineText}>
-                {configData?.partner_info?.online_status || 'Online'}
-              </Text>
-              <Text style={styles.statusDot}>•</Text>
-              <Text style={styles.closingText}>
-                {configData?.partner_info?.closing_info || 'Closes at 12:00 am, Tomorrow'}
-              </Text>
-            </View>
+            {configData?.partner_info && (
+              <View style={styles.statusContainer}>
+                <Text style={styles.onlineText}>
+                  {configData.partner_info.online_status || ''}
+                </Text>
+                {configData.partner_info.online_status && configData.partner_info.closing_info && (
+                  <>
+                    <Text style={styles.statusDot}>•</Text>
+                    <Text style={styles.closingText}>
+                      {configData.partner_info.closing_info}
+                    </Text>
+                  </>
+                )}
+              </View>
+            )}
           </View>
         </View>
       </View>

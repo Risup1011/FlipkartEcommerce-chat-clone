@@ -207,10 +207,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
     setIsSaving(true);
     try {
       const url = `${API_BASE_URL}v1/outlet/timings`;
-        day: editingDay,
-        is_open: isOpen,
-        slots: isOpen ? slots : [],
-      }, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: 'PATCH',

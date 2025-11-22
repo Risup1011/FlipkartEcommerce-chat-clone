@@ -63,6 +63,10 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
 
   // Get linked add-ons from itemData and prefill customization settings
   useEffect(() => {
+    console.log('🔄 [AddAddonsScreen] useEffect triggered - itemData changed');
+    console.log('🔄 [AddAddonsScreen] itemData:', itemData ? { id: itemData.id, add_ons_count: itemData.add_ons?.length || 0 } : 'null');
+    console.log('🔄 [AddAddonsScreen] itemData.add_ons:', itemData?.add_ons ? JSON.stringify(itemData.add_ons, null, 2) : 'none');
+    
     if (itemData && itemData.add_ons && Array.isArray(itemData.add_ons) && itemData.add_ons.length > 0) {
       // Enrich linked add-ons with price information from allAddons
       const enrichedLinkedAddons = itemData.add_ons.map((linkedAddon) => {
@@ -73,20 +77,25 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
         };
       });
       setLinkedAddons(enrichedLinkedAddons);
+      console.log('📋 [AddAddonsScreen] Loaded linked add-ons:', enrichedLinkedAddons);
 
       // Prefill customization settings from the first linked add-on
       // (assuming all add-ons in the same group share the same settings)
       const firstLinkedAddon = enrichedLinkedAddons[0];
       if (firstLinkedAddon) {
+        console.log('🔍 [AddAddonsScreen] Prefilling customization settings from linked add-on:', firstLinkedAddon);
+        
         // Prefill selection type (Compulsory/Optional)
         if (firstLinkedAddon.selection_type) {
           const isMandatory = firstLinkedAddon.selection_type === 'MANDATORY';
           setIsCompulsory(isMandatory);
+          console.log('✅ [AddAddonsScreen] Prefilled isCompulsory:', isMandatory);
         }
 
         // Prefill min selection
         if (firstLinkedAddon.min_selection !== undefined && firstLinkedAddon.min_selection !== null) {
           setMinSelection(String(firstLinkedAddon.min_selection));
+          console.log('✅ [AddAddonsScreen] Prefilled minSelection:', firstLinkedAddon.min_selection);
         }
 
         // Prefill max selection
@@ -94,12 +103,15 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
           // Convert 999 (unlimited) to "All", otherwise use the number
           if (firstLinkedAddon.max_selection === 999 || firstLinkedAddon.max_selection >= 10) {
             setMaxSelection('All');
+            console.log('✅ [AddAddonsScreen] Prefilled maxSelection: All (unlimited)');
           } else {
             setMaxSelection(String(firstLinkedAddon.max_selection));
+            console.log('✅ [AddAddonsScreen] Prefilled maxSelection:', firstLinkedAddon.max_selection);
           }
         } else {
           // If max_selection is null, it means unlimited
           setMaxSelection('All');
+          console.log('✅ [AddAddonsScreen] Prefilled maxSelection: All (null = unlimited)');
         }
       }
     } else {
@@ -161,6 +173,8 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
       });
 
       const url = `${API_BASE_URL}v1/catalog/items/${itemId}/addons`;
+      console.log('📡 [AddAddonsScreen] Updating add-ons settings:', url);
+      console.log('📤 [AddAddonsScreen] Request body:', JSON.stringify(requestBody, null, 2));
 
       // Use POST to update all add-ons at once (same endpoint as linking)
       const response = await fetchWithAuth(url, {
@@ -169,6 +183,7 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
       });
 
       const data = await response.json();
+      console.log('📥 [AddAddonsScreen] Update Add-ons API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
         const successMsg = getUILabel('addon_settings_saved_success', 'Customization settings saved successfully');
@@ -226,12 +241,14 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
     try {
       const itemId = itemData.id;
       const url = `${API_BASE_URL}v1/catalog/items/${itemId}/addons/${addonId}`;
+      console.log('📡 [AddAddonsScreen] Unlinking add-on:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'DELETE',
       });
 
       const data = await response.json();
+      console.log('📥 [AddAddonsScreen] Unlink Add-on API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
         const successMsg = getUILabel('addon_removed_success', 'Add-on removed successfully');

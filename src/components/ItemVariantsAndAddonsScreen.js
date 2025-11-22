@@ -147,22 +147,30 @@ const ItemVariantsAndAddonsScreen = ({ onBack, onNext, onNavigate, itemData = nu
   }, [addonConfig]);
 
   const handleVariantSelect = (variantId, variantTitle) => {
+    console.log('🔵 [ItemVariantsAndAddonsScreen] Variant selected:', variantId, variantTitle);
     // Navigate to Add Quantity screen (or appropriate variant screen)
     if (onNavigate) {
+      console.log('🔵 [ItemVariantsAndAddonsScreen] Calling onNavigate for variant');
       onNavigate('variant', {
         variantType: variantId,
         variantTitle: variantTitle,
       });
+    } else {
+      console.warn('⚠️ [ItemVariantsAndAddonsScreen] onNavigate prop is not provided');
     }
   };
 
   const handleAddonSelect = (addonId, addonTitle) => {
+    console.log('🟢 [ItemVariantsAndAddonsScreen] Addon selected:', addonId, addonTitle);
     // Navigate to Add Add-ons screen
     if (onNavigate) {
+      console.log('🟢 [ItemVariantsAndAddonsScreen] Calling onNavigate for addon');
       onNavigate('addon', {
         addonType: addonId,
         addonTitle: addonTitle,
       });
+    } else {
+      console.warn('⚠️ [ItemVariantsAndAddonsScreen] onNavigate prop is not provided');
     }
   };
 

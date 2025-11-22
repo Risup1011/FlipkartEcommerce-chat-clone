@@ -8,6 +8,7 @@ export const images = {
   splashIcon: require('./images/SplashIcon.png'),
   congrats: require('./images/Congrats.png'),
   newOrder: require('./images/NewOrder.png'),
+  rightArrow: require('./images/right-arrow.png'),
 };
 
 // Icons

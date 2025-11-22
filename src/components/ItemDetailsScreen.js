@@ -39,6 +39,7 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, onNext, itemData = null
       try {
         // Try fetching from config endpoint first
         const url = `${API_BASE_URL}v1/config`;
+        console.log('📡 [ItemDetailsScreen] Fetching GST options from:', url);
         
         const response = await fetchWithAuth(url, {
           method: 'GET',
@@ -85,16 +86,19 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, onNext, itemData = null
             });
             
             setGstOptions(formattedOptions);
+            console.log('✅ [ItemDetailsScreen] GST options loaded from backend:', formattedOptions);
             
             // Validate current GST value is in the new options
             setGst(prevGst => {
               if (!formattedOptions.includes(prevGst)) {
+                console.log(`⚠️ [ItemDetailsScreen] Current GST value "${prevGst}" not in backend options, resetting to first option`);
                 return formattedOptions[0] || '0%';
               }
               return prevGst;
             });
           } else {
             // If no GST options found in config, try a dedicated GST endpoint
+            console.log('⚠️ [ItemDetailsScreen] No GST options in config, trying dedicated endpoint...');
             const gstUrl = `${API_BASE_URL}v1/gst-rates`;
             const gstResponse = await fetchWithAuth(gstUrl, {
               method: 'GET',
@@ -109,16 +113,22 @@ const ItemDetailsScreen = ({ onBack, categoryId, onSave, onNext, itemData = null
                 return (typeof rate === 'number' ? rate : parseFloat(rate) || 0) + '%';
               });
               setGstOptions(formattedOptions);
+              console.log('✅ [ItemDetailsScreen] GST options loaded from dedicated endpoint:', formattedOptions);
               
               // Validate current GST value is in the new options
               setGst(prevGst => {
                 if (!formattedOptions.includes(prevGst)) {
+                  console.log(`⚠️ [ItemDetailsScreen] Current GST value "${prevGst}" not in backend options, resetting to first option`);
                   return formattedOptions[0] || '0%';
                 }
                 return prevGst;
               });
+            } else {
+              console.log('⚠️ [ItemDetailsScreen] No GST endpoint found, using default options');
             }
           }
+        } else {
+          console.log('⚠️ [ItemDetailsScreen] Config fetch failed, using default GST options');
         }
       } catch (error) {
         console.error('❌ [ItemDetailsScreen] Error fetching GST options:', error);

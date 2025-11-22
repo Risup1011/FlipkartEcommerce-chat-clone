@@ -41,10 +41,12 @@ export default function App() {
     // Listen for app state changes to clear Redux data when app closes
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
-        // App is going to background - clear Redux menu data
-        console.log('📱 [App] App going to background - clearing Redux menu data');
+        // App is going to background - clear Redux menu data (in-memory only)
+        // Keep AsyncStorage cache so data can be restored on app reopen
+        console.log('📱 [App] App going to background - clearing Redux menu data (keeping cache)');
         store.dispatch(clearMenuData());
-        clearMenuDataFromStorage();
+        // Don't clear AsyncStorage - keep cache for app restart
+        // clearMenuDataFromStorage();
       }
     });
 

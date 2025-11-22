@@ -140,6 +140,7 @@ export const saveMenuDataToStorage = async (categories, lastPage) => {
   try {
     await AsyncStorage.setItem(MENU_STORAGE_KEY, JSON.stringify(categories));
     await AsyncStorage.setItem(MENU_PAGE_KEY, JSON.stringify(lastPage));
+    console.log('💾 [MenuSlice] Menu data saved to storage, last page:', lastPage);
   } catch (error) {
     console.error('❌ [MenuSlice] Error saving menu data to storage:', error);
   }
@@ -155,6 +156,7 @@ export const loadMenuDataFromStorage = async () => {
     if (cachedData) {
       const categories = JSON.parse(cachedData);
       const lastPage = lastPageStr ? JSON.parse(lastPageStr) : 0;
+      console.log('📥 [MenuSlice] Menu data loaded from storage, last page:', lastPage);
       return { categories, lastPage };
     }
     return null;
@@ -168,6 +170,7 @@ export const clearMenuDataFromStorage = async () => {
   try {
     await AsyncStorage.removeItem(MENU_STORAGE_KEY);
     await AsyncStorage.removeItem(MENU_PAGE_KEY);
+    console.log('🗑️ [MenuSlice] Menu data cleared from storage');
   } catch (error) {
     console.error('❌ [MenuSlice] Error clearing menu data from storage:', error);
   }

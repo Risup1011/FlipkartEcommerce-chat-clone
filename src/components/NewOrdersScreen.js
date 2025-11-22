@@ -237,12 +237,14 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
               resizeMode="contain"
             />
             <View style={styles.orderInfo}>
-              <Text style={styles.orderId}>Order #{order.id}</Text>
-              <Text style={styles.orderTime}>{order.time || 'Just now'}</Text>
+              <Text style={styles.orderId}>
+                {order.orderNumber || `Order #${order.id?.slice(-6) || 'N/A'}`}
+              </Text>
+              <Text style={styles.orderTime}>{order.time || order.timeDisplay || 'Just now'}</Text>
             </View>
           </View>
           <View style={styles.orderAmountContainer}>
-            <Text style={styles.orderAmount}>₹{order.amount || '0'}</Text>
+            <Text style={styles.orderAmount}>₹{order.amount?.toFixed(2) || '0.00'}</Text>
           </View>
         </View>
 
@@ -254,13 +256,37 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
               <Text style={styles.detailValue}>{order.customerName}</Text>
             </View>
           )}
-          {order.items && order.items.length > 0 && (
+          {order.customerPhone && (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Items:</Text>
-              <Text style={styles.detailValue}>{order.items.length} item(s)</Text>
+              <Text style={styles.detailLabel}>Phone:</Text>
+              <Text style={styles.detailValue}>{order.customerPhone}</Text>
             </View>
           )}
-          {order.deliveryAddress && (
+          {order.itemsPreview ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Items:</Text>
+              <Text style={styles.detailValue} numberOfLines={2}>
+                {order.itemsPreview}
+              </Text>
+            </View>
+          ) : order.items && order.items.length > 0 ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Items:</Text>
+              <Text style={styles.detailValue}>{order.itemCount || order.items.length} item(s)</Text>
+            </View>
+          ) : order.itemCount ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Items:</Text>
+              <Text style={styles.detailValue}>{order.itemCount} item(s)</Text>
+            </View>
+          ) : null}
+          {order.paymentMethod && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Payment:</Text>
+              <Text style={styles.detailValue}>{order.paymentMethod}</Text>
+            </View>
+          )}
+          {order.deliveryAddress && order.deliveryAddress !== 'Address not available' && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Address:</Text>
               <Text style={styles.detailValue} numberOfLines={2}>
@@ -268,10 +294,10 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
               </Text>
             </View>
           )}
-          {order.estimatedTime && (
+          {order.statusDisplay && (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Est. Time:</Text>
-              <Text style={styles.detailValue}>{order.estimatedTime} mins</Text>
+              <Text style={styles.detailLabel}>Status:</Text>
+              <Text style={styles.detailValue}>{order.statusDisplay}</Text>
             </View>
           )}
         </View>
@@ -306,12 +332,13 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
     <Modal
       visible={visible}
       animationType="slide"
-      transparent={false}
+      transparent={true}
       onRequestClose={onClose}
     >
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        {/* Header */}
-        <View style={styles.header}>
+      <View style={styles.modalOverlay}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+          {/* Header */}
+          <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Image
               source={images.newOrder || icons.orders}
@@ -357,31 +384,40 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
           >
             <OrderDetailsScreen
               order={selectedOrder}
+              orderId={selectedOrder?.id}
               onBack={handleBackFromDetails}
               onAccept={handleAcceptFromDetails}
               onDeny={handleDenyFromDetails}
             />
           </Modal>
         )}
-      </SafeAreaView>
+        </SafeAreaView>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
   container: {
     flex: 1,
     backgroundColor: '#F5F5F5',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    paddingVertical: 8,
+    backgroundColor: '#4CAF50',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -389,20 +425,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerIcon: {
-    width: 32,
-    height: 32,
+    width: 56,
+    height: 56,
     marginRight: 12,
   },
   headerTitle: {
-    fontFamily: Poppins.bold,
-    fontSize: 20,
-    color: '#000000',
+    fontFamily: Poppins.medium,
+    fontSize: 16,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   headerSubtitle: {
     fontFamily: Poppins.regular,
     fontSize: 12,
-    color: '#666666',
+    color: '#FFFFFF',
   },
   closeButton: {
     width: 32,
@@ -410,11 +446,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 16,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   closeButtonText: {
     fontSize: 18,
-    color: '#666666',
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   listContainer: {

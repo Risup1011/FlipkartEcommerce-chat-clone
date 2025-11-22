@@ -53,8 +53,12 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
 
   // Prefill variant data if editing existing variant
   useEffect(() => {
+    console.log('🔍 [AddQuantityScreen] Prefill check - itemData:', itemData ? JSON.stringify(itemData, null, 2) : 'null');
+    console.log('🔍 [AddQuantityScreen] Prefill check - variantType:', variantType);
     
     if (itemData && itemData.variants && Array.isArray(itemData.variants)) {
+      console.log('🔍 [AddQuantityScreen] Variants array found:', itemData.variants.length, 'variants');
+      console.log('🔍 [AddQuantityScreen] Variants:', JSON.stringify(itemData.variants, null, 2));
       
       // Find variant that matches the current variantType
       // For CUSTOM variants, also check custom_variant_name
@@ -67,14 +71,17 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         }
       );
       
+      console.log('🔍 [AddQuantityScreen] Matching variant found:', existingVariant ? 'YES' : 'NO');
 
       if (existingVariant && existingVariant.options && existingVariant.options.length > 0) {
+        console.log('📋 [AddQuantityScreen] Found existing variant:', existingVariant);
         setExistingVariantId(existingVariant.variant_id || existingVariant.id || null);
         
         // For CUSTOM variants, use custom_variant_name or variant_group_name as editable title
         if (variantType === 'CUSTOM' && existingVariant) {
           const customTitle = existingVariant.custom_variant_name || existingVariant.variant_group_name || variantTitle;
           setEditableVariantTitle(customTitle);
+          console.log('✅ [AddQuantityScreen] Prefilled CUSTOM variant title:', customTitle);
         }
         
         // Store variant settings from existing variant (backend dynamic)
@@ -104,12 +111,14 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         }
 
         setVariantOptions(prefilledOptions);
+        console.log('✅ [AddQuantityScreen] Prefilled variant options:', prefilledOptions);
         
         const settingsFromBackend = {
           is_mandatory: existingVariant.is_mandatory !== undefined ? existingVariant.is_mandatory : true,
           min_selection: existingVariant.min_selection !== undefined ? existingVariant.min_selection : 1,
           max_selection: existingVariant.max_selection !== undefined ? existingVariant.max_selection : 1,
         };
+        console.log('✅ [AddQuantityScreen] Variant settings from backend:', settingsFromBackend);
       } else {
         // No existing variant found, reset to default
         setExistingVariantId(null);
@@ -239,6 +248,8 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         })),
       };
 
+      console.log('📡 [AddQuantityScreen] Updating variant after option removal:', url);
+      console.log('📤 [AddQuantityScreen] Updated Variant Data:', JSON.stringify(apiPayload, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: 'PUT',
@@ -246,8 +257,10 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       });
 
       const data = await response.json();
+      console.log('📥 [AddQuantityScreen] Update Variant API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
+        console.log('✅ [AddQuantityScreen] Variant updated successfully after option removal');
         return true; // Success
       } else {
         const errorMessage = data.message || data.error || 'Failed to update variant';
@@ -278,16 +291,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     const hasEmptyNames = variantOptions.some((opt) => !opt.name.trim());
     if (hasEmptyNames) {
       const errorMsg = getUILabel('variant_option_name_required', 'Please enter a name for all variant options');
-      showToast(errorMsg, 'error');
-      return;
-    }
-
-    // Check for empty additional price fields
-    const hasEmptyAdditionalPrice = variantOptions.some((opt) => {
-      return !opt.additionalPrice || opt.additionalPrice.trim() === '';
-    });
-    if (hasEmptyAdditionalPrice) {
-      const errorMsg = getUILabel('additional_price_required', 'Additional price field is empty. Please enter an amount.');
       showToast(errorMsg, 'error');
       return;
     }
@@ -383,6 +386,8 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         options: validOptions,
       };
 
+      console.log(`📡 [AddQuantityScreen] ${isUpdating ? 'Updating' : 'Creating'} variant:`, url);
+      console.log('📤 [AddQuantityScreen] Variant Data:', JSON.stringify(apiPayload, null, 2));
 
       const response = await fetchWithAuth(url, {
         method: isUpdating ? 'PUT' : 'POST',
@@ -390,6 +395,9 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       });
 
       const data = await response.json();
+      console.log('📥 [AddQuantityScreen] Create Variant API Response:', JSON.stringify(data, null, 2));
+      console.log('📥 [AddQuantityScreen] Response Status:', response.status);
+      console.log('📥 [AddQuantityScreen] Response OK:', response.ok);
 
       if (response.ok && (data.code === 200 || data.code === 201) && data.status === 'success') {
         const successMsg = isUpdating 
@@ -481,12 +489,14 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       const itemId = itemData.id;
       const url = `${API_BASE_URL}v1/catalog/items/${itemId}/variants/${existingVariantId}`;
       
+      console.log('📡 [AddQuantityScreen] Deleting variant:', url);
 
       const response = await fetchWithAuth(url, {
         method: 'DELETE',
       });
 
       const data = await response.json();
+      console.log('📥 [AddQuantityScreen] Delete Variant API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
         const successMsg = getUILabel('variant_deleted_success', 'Variant deleted successfully');
