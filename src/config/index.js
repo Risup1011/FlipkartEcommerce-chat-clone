@@ -11,6 +11,13 @@
 // Option 2: Staging API (production-like environment)
 export const API_BASE_URL = 'http://kamai24-stage.eba-aejbahak.ap-south-1.elasticbeanstalk.com/partner/api/';
 
+// Rider API Base URL (for rider-specific endpoints)
+export const RIDER_API_BASE_URL = 'http://kamai24-stage.eba-aejbahak.ap-south-1.elasticbeanstalk.com/rider/api/';
+
+// Default Rider ID for partner app to use when calling rider API endpoints
+// TODO: This should be replaced with actual rider ID from order assignment or user context
+export const DEFAULT_RIDER_ID = 'RIDER_R001';
+
 /**
  * Mock OTP Configuration (for development/testing)
  * 

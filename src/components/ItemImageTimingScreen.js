@@ -224,16 +224,47 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
     }
   };
 
+  const deleteImageFromServer = async (fileUrl, menuItemId) => {
+    try {
+      const endpoint = `${API_BASE_URL}v1/partners/media`;
+      
+      const requestBody = {
+        file_url: fileUrl,
+        menu_item_id: menuItemId,
+      };
+
+      const response = await fetchWithAuth(endpoint, {
+        method: 'DELETE',
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.code === 200 && data.status === 'success') {
+        return { success: true, data: data.data };
+      } else {
+        const errorMessage = data.message || 'Failed to delete image';
+        console.error('❌ [ItemImageTimingScreen] Delete image failed:', errorMessage);
+        return { success: false, error: errorMessage };
+      }
+    } catch (error) {
+      console.error('❌ [ItemImageTimingScreen] Error deleting image:', error);
+      return { success: false, error: 'Failed to delete image' };
+    }
+  };
+
   const handleRemoveImage = async (imageId) => {
     const removeTitle = screenData?.messages?.remove_image?.title || 'Remove Image';
     const removeMessage = screenData?.messages?.remove_image?.message || 'Are you sure you want to remove this image?';
     const cancelText = screenData?.messages?.remove_image?.cancel || 'Cancel';
     const removeText = screenData?.messages?.remove_image?.confirm || 'Remove';
     const removedMsg = screenData?.messages?.success?.image_removed || 'Image removed';
+    const deleteErrorMsg = screenData?.messages?.error?.delete_failed || 'Failed to delete image';
     
     // Find the image to check if it's an existing image from backend
     const imageToRemove = uploadedImages.find(img => img.id === imageId);
     const isExistingImage = imageToRemove?.isExisting;
+    const fileUrl = imageToRemove?.imageUrl || imageToRemove?.originalUri || imageToRemove?.uri;
     
     Alert.alert(
       removeTitle,
@@ -244,16 +275,30 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
           text: removeText,
           style: 'destructive',
           onPress: async () => {
-            // For existing images, we might want to call a delete API endpoint
-            // For now, we'll just remove it from the state
-            // When the user submits, only remaining images will be kept
-            if (isExistingImage && imageToRemove?.imageUrl && itemId) {
-              // TODO: If backend has a delete image endpoint, call it here
-              // For now, we'll just remove from state
+            // For existing images, call the delete API endpoint
+            if (isExistingImage && fileUrl && itemId) {
+              try {
+                const deleteResult = await deleteImageFromServer(fileUrl, itemId);
+                
+                if (deleteResult.success) {
+                  // Successfully deleted from server, remove from state
+                  setUploadedImages((prev) => prev.filter((img) => img.id !== imageId));
+                  showToast(removedMsg, 'success');
+                } else {
+                  // Failed to delete from server, show error
+                  showToast(deleteResult.error || deleteErrorMsg, 'error');
+                  return; // Don't remove from state if API call failed
+                }
+              } catch (error) {
+                console.error('❌ [ItemImageTimingScreen] Error in delete operation:', error);
+                showToast(deleteErrorMsg, 'error');
+                return; // Don't remove from state if there was an error
+              }
+            } else {
+              // For new images (not yet uploaded), just remove from state
+              setUploadedImages((prev) => prev.filter((img) => img.id !== imageId));
+              showToast(removedMsg, 'success');
             }
-            
-            setUploadedImages((prev) => prev.filter((img) => img.id !== imageId));
-            showToast(removedMsg, 'success');
           },
         },
       ]
@@ -467,7 +512,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
   const uploadButtonText = screenData?.image_section?.upload_button_text || 'BROWSE FILES TO UPLOAD';
   const uploadSubtext = `[Max: ${maxSizeMB}MB] (${formats.join('/')})`;
   
-  const deleteButtonText = screenData?.buttons?.delete || 'Delete';
   const submitButtonText = screenData?.buttons?.submit || 'SUBMIT';
 
   return (
@@ -551,26 +595,21 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
       </ScrollView>
 
       {/* Footer Buttons */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={handleDelete}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.deleteButtonText}>{deleteButtonText}</Text>
-        </TouchableOpacity>
-        <CustomButton
-          title={
-            uploading 
-              ? (screenData?.messages?.uploading?.progress || `UPLOADING... (${uploadProgress.current || 0}/${uploadProgress.total || 0})`).replace('{current}', uploadProgress.current || 0).replace('{total}', uploadProgress.total || 0)
-              : submitButtonText
-          }
-          onPress={handleSubmit}
-          style={styles.submitButton}
-          disabled={uploading}
-          loading={uploading}
-        />
-      </View>
+      {uploadedImages.length > 0 && (
+        <View style={styles.footer}>
+          <CustomButton
+            title={
+              uploading 
+                ? (screenData?.messages?.uploading?.progress || `UPLOADING... (${uploadProgress.current || 0}/${uploadProgress.total || 0})`).replace('{current}', uploadProgress.current || 0).replace('{total}', uploadProgress.total || 0)
+                : submitButtonText
+            }
+            onPress={handleSubmit}
+            style={styles.submitButton}
+            disabled={uploading}
+            loading={uploading}
+          />
+        </View>
+      )}
 
       {/* Image Preview Modal */}
       <Modal
@@ -796,22 +835,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E0E0E0',
     backgroundColor: '#FFFFFF',
-    gap: 12,
-  },
-  deleteButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#000000',
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  deleteButtonText: {
-    fontFamily: Poppins.medium,
-    fontSize: 16,
-    color: '#000000',
   },
   submitButton: {
     flex: 1,

@@ -8,8 +8,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Image,
 } from 'react-native';
-import { Poppins } from '../assets';
+import { Poppins, icons } from '../assets';
 import CustomHeader from './CustomHeader';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
@@ -230,14 +231,11 @@ const AddOnsSelectionScreen = ({
                 activeOpacity={0.7}
               >
                 <View style={styles.addonItemLeft}>
-                  <View
-                    style={[
-                      styles.vegIndicator,
-                      addon.isVeg ? styles.vegIndicatorGreen : styles.vegIndicatorOrange,
-                    ]}
-                  >
-                    <View style={styles.vegDot} />
-                  </View>
+                  <Image
+                    source={addon.isVeg ? icons.veg : icons.nonVeg}
+                    style={styles.vegIcon}
+                    resizeMode="contain"
+                  />
                   <Text style={styles.addonName}>{addon.name}</Text>
                 </View>
                 <View style={styles.addonItemRight}>
@@ -338,6 +336,11 @@ const styles = StyleSheet.create({
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  vegIcon: {
+    width: 16,
+    height: 16,
+    marginRight: 12,
   },
   vegIndicatorGreen: {
     backgroundColor: '#4CAF50',

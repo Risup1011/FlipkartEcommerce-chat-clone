@@ -29,7 +29,9 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
   // Fetch order details from API if orderId is provided
   useEffect(() => {
     const fetchOrderDetails = async () => {
-      if (orderId && !order) {
+      // Always fetch from API if orderId is available to get full pricing details
+      // The order prop might not have complete pricing breakdown
+      if (orderId) {
         setIsLoading(true);
         try {
           const url = `${API_BASE_URL}v1/orders/${orderId}`;
@@ -61,8 +63,39 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
             console.log(`  - Preparation Time: ${responseData.data.preparation_time_minutes} minutes`);
             console.log(`  - Status Timeline: ${responseData.data.status_timeline?.length || 0} entries`);
             
+            // Log BILL DETAILS from API response
+            console.log('💰 [OrderDetailsScreen] ========================================');
+            console.log('💰 [OrderDetailsScreen] BILL DETAILS FROM API');
+            console.log('💰 [OrderDetailsScreen] ========================================');
+            console.log('💰 [OrderDetailsScreen] Raw API Pricing Object:', JSON.stringify(responseData.data.pricing, null, 2));
+            if (responseData.data.pricing) {
+              console.log('💰 [OrderDetailsScreen] Item Total:', responseData.data.pricing.item_total);
+              console.log('💰 [OrderDetailsScreen] Packaging Charge:', responseData.data.pricing.packaging_charge);
+              console.log('💰 [OrderDetailsScreen] Delivery Charge:', responseData.data.pricing.delivery_charge);
+              console.log('💰 [OrderDetailsScreen] GST Amount:', responseData.data.pricing.gst_amount);
+              console.log('💰 [OrderDetailsScreen] Discount Amount:', responseData.data.pricing.discount_amount);
+              console.log('💰 [OrderDetailsScreen] Total Amount:', responseData.data.pricing.total_amount);
+            } else {
+              console.warn('⚠️ [OrderDetailsScreen] No pricing object in API response!');
+            }
+            console.log('💰 [OrderDetailsScreen] ========================================');
+            
             const transformedOrder = transformApiOrder(responseData.data);
             console.log('✅ [OrderDetailsScreen] Order transformed successfully');
+            
+            // Log transformed bill details
+            console.log('💰 [OrderDetailsScreen] ========================================');
+            console.log('💰 [OrderDetailsScreen] TRANSFORMED BILL DETAILS');
+            console.log('💰 [OrderDetailsScreen] ========================================');
+            console.log('💰 [OrderDetailsScreen] Transformed Order Pricing:');
+            console.log(`  - itemTotal: ₹${transformedOrder.itemTotal || 0}`);
+            console.log(`  - packagingCharge: ₹${transformedOrder.packagingCharge || 0}`);
+            console.log(`  - deliveryCharge: ₹${transformedOrder.deliveryCharge || 0}`);
+            console.log(`  - gst: ₹${transformedOrder.gst || 0}`);
+            console.log(`  - discountAmount: ₹${transformedOrder.discountAmount || 0}`);
+            console.log(`  - totalAmount: ₹${transformedOrder.totalAmount || 0}`);
+            console.log('💰 [OrderDetailsScreen] ========================================');
+            
             setOrderData(transformedOrder);
             setEstimatedTime(transformedOrder.preparationTimeMinutes || 15);
           } else {
@@ -70,21 +103,48 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
             console.error(`❌ [OrderDetailsScreen] Failed to fetch order details:`, response.status);
             console.error(`❌ [OrderDetailsScreen] Response:`, JSON.stringify(responseData, null, 2));
             console.error('❌ [OrderDetailsScreen] ========================================');
-            showToast('Failed to load order details', 'error');
-            if (onBack) onBack();
+            // Fallback to provided order if API fails
+            if (order) {
+              console.warn('⚠️ [OrderDetailsScreen] Falling back to provided order data');
+              setOrderData(order);
+              setEstimatedTime(order?.preparationTimeMinutes || order?.estimatedTime || 15);
+            } else {
+              showToast('Failed to load order details', 'error');
+              if (onBack) onBack();
+            }
           }
         } catch (error) {
           console.error('❌ [OrderDetailsScreen] ========================================');
           console.error(`❌ [OrderDetailsScreen] Error fetching order details:`, error);
           console.error(`❌ [OrderDetailsScreen] Error message:`, error.message);
           console.error('❌ [OrderDetailsScreen] ========================================');
-          showToast('Error loading order details', 'error');
-          if (onBack) onBack();
+          // Fallback to provided order if API fails
+          if (order) {
+            console.warn('⚠️ [OrderDetailsScreen] Falling back to provided order data due to error');
+            setOrderData(order);
+            setEstimatedTime(order?.preparationTimeMinutes || order?.estimatedTime || 15);
+          } else {
+            showToast('Error loading order details', 'error');
+            if (onBack) onBack();
+          }
         } finally {
           setIsLoading(false);
         }
       } else if (order) {
-        console.log('📋 [OrderDetailsScreen] Using provided order data (not fetching from API)');
+        // Only use provided order if orderId is not available
+        console.log('📋 [OrderDetailsScreen] Using provided order data (orderId not available)');
+        console.log('💰 [OrderDetailsScreen] ========================================');
+        console.log('💰 [OrderDetailsScreen] BILL DETAILS FROM PROVIDED ORDER');
+        console.log('💰 [OrderDetailsScreen] ========================================');
+        console.log('💰 [OrderDetailsScreen] Provided Order Pricing:');
+        console.log(`  - itemTotal: ₹${order.itemTotal || 0}`);
+        console.log(`  - packagingCharge: ₹${order.packagingCharge || 0}`);
+        console.log(`  - deliveryCharge: ₹${order.deliveryCharge || 0}`);
+        console.log(`  - gst: ₹${order.gst || 0}`);
+        console.log(`  - discountAmount: ₹${order.discountAmount || 0}`);
+        console.log(`  - totalAmount: ₹${order.totalAmount || order.amount || 0}`);
+        console.log('💰 [OrderDetailsScreen] Full order object:', JSON.stringify(order, null, 2));
+        console.log('💰 [OrderDetailsScreen] ========================================');
         setOrderData(order);
         setEstimatedTime(order?.preparationTimeMinutes || order?.estimatedTime || 15);
       }
@@ -123,9 +183,11 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
       // For display
       price: item.item_total || 0,
       category: item.variant?.variant_name || '',
+      // Price breakdown
+      priceBreakdown: item.price_breakdown || null,
     }));
 
-    return {
+    const transformedOrder = {
       id: apiOrder.id,
       orderNumber: apiOrder.order_number,
       status: apiOrder.status,
@@ -161,6 +223,22 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
       riderDetails: apiOrder.rider_details,
       isAssignedToRider: apiOrder.is_assigned_to_rider,
     };
+    
+    // Log transformation details for pricing
+    console.log('💰 [OrderDetailsScreen] ========================================');
+    console.log('💰 [OrderDetailsScreen] TRANSFORMING PRICING DATA');
+    console.log('💰 [OrderDetailsScreen] ========================================');
+    console.log('💰 [OrderDetailsScreen] API Pricing Object:', JSON.stringify(apiOrder.pricing, null, 2));
+    console.log('💰 [OrderDetailsScreen] Transformed Pricing Values:');
+    console.log(`  - itemTotal: ${apiOrder.pricing?.item_total} → ${transformedOrder.itemTotal}`);
+    console.log(`  - packagingCharge: ${apiOrder.pricing?.packaging_charge} → ${transformedOrder.packagingCharge}`);
+    console.log(`  - deliveryCharge: ${apiOrder.pricing?.delivery_charge} → ${transformedOrder.deliveryCharge}`);
+    console.log(`  - gst: ${apiOrder.pricing?.gst_amount} → ${transformedOrder.gst}`);
+    console.log(`  - discountAmount: ${apiOrder.pricing?.discount_amount} → ${transformedOrder.discountAmount}`);
+    console.log(`  - totalAmount: ${apiOrder.pricing?.total_amount} → ${transformedOrder.totalAmount}`);
+    console.log('💰 [OrderDetailsScreen] ========================================');
+    
+    return transformedOrder;
   };
 
   if (isLoading) {
@@ -183,6 +261,23 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
   const packagingCharge = orderData.packagingCharge || 0;
   const gst = orderData.gst || 0;
   const totalAmount = orderData.totalAmount || (itemTotal + packagingCharge + gst);
+  
+  // Log calculated bill details for rendering
+  console.log('💰 [OrderDetailsScreen] ========================================');
+  console.log('💰 [OrderDetailsScreen] CALCULATED BILL DETAILS FOR RENDERING');
+  console.log('💰 [OrderDetailsScreen] ========================================');
+  console.log('💰 [OrderDetailsScreen] orderData.itemTotal:', orderData.itemTotal);
+  console.log('💰 [OrderDetailsScreen] orderData.packagingCharge:', orderData.packagingCharge);
+  console.log('💰 [OrderDetailsScreen] orderData.deliveryCharge:', orderData.deliveryCharge);
+  console.log('💰 [OrderDetailsScreen] orderData.gst:', orderData.gst);
+  console.log('💰 [OrderDetailsScreen] orderData.discountAmount:', orderData.discountAmount);
+  console.log('💰 [OrderDetailsScreen] orderData.totalAmount:', orderData.totalAmount);
+  console.log('💰 [OrderDetailsScreen] Calculated itemTotal:', itemTotal);
+  console.log('💰 [OrderDetailsScreen] Calculated packagingCharge:', packagingCharge);
+  console.log('💰 [OrderDetailsScreen] Calculated gst:', gst);
+  console.log('💰 [OrderDetailsScreen] Calculated totalAmount:', totalAmount);
+  console.log('💰 [OrderDetailsScreen] Items count:', orderData.items?.length || 0);
+  console.log('💰 [OrderDetailsScreen] ========================================');
 
   // Format order ID (e.g., "#18889874916-1956")
   const formatOrderId = (orderNumber) => {
@@ -351,11 +446,10 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
               {orderTime} | {orderData.items?.length || 0} items for ₹{totalAmount.toFixed(2)}
             </Text>
           </View>
-          <View style={styles.newTag}>
-            <Text style={styles.newTagText}>{orderData.statusDisplay || orderData.status || 'NEW'}</Text>
-          </View>
         </View>
-        <View style={styles.placeholder} />
+        <View style={styles.newTag}>
+          <Text style={styles.newTagText}>{orderData.statusDisplay || orderData.status || 'NEW'}</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -402,36 +496,85 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
           {orderData.items && orderData.items.length > 0 ? (
             orderData.items.map((item, index) => {
               // Build item description with variant and addons
-              const variantText = item.variant ? `${item.variant.variant_name}: ${item.variant.option_name}` : '';
-              const addonsText = item.addons && item.addons.length > 0 
-                ? item.addons.map(a => a.addon_name).join(', ')
+              // Support multiple formats: item.variant, item.selected_variant, item.variant_name
+              let variantText = '';
+              if (item.variant) {
+                // Format: { variant_name: "...", option_name: "..." }
+                variantText = item.variant.option_name || item.variant.variant_name || '';
+              } else if (item.selected_variant) {
+                variantText = item.selected_variant.option_name || item.selected_variant.variant_name || '';
+              } else if (item.variant_name) {
+                variantText = item.variant_name;
+              }
+              
+              // Support multiple formats: item.addons, item.selected_addons
+              const addons = item.addons || item.selected_addons || [];
+              const addonsText = addons.length > 0 
+                ? addons.map(a => a.addon_name || a.name || a).join(', ')
                 : '';
-              const categoryText = [variantText, addonsText].filter(Boolean).join(' • ') || '';
+              
+              // Show variant/option name below product name
+              const optionText = variantText || '';
+              const addonsDisplayText = addonsText || '';
+
+              // Get price breakdown if available
+              const priceBreakdown = item.priceBreakdown || item.price_breakdown;
 
               return (
                 <View 
-                  key={item.id || index} 
+                  key={item.id || item.menu_item_id || index} 
                   style={[
                     styles.itemRow,
                     index === orderData.items.length - 1 && styles.lastItemRow
                   ]}
                 >
                   <View style={styles.itemLeft}>
-                    <View style={[
-                      styles.vegIcon,
-                      (item.type === 'veg' || item.isVeg || item.item_type === 'VEG') ? styles.vegIconGreen : styles.vegIconOrange
-                    ]}>
-                      <Text style={styles.vegIconText}>
-                        {(item.type === 'veg' || item.isVeg || item.item_type === 'VEG') ? '●' : '▲'}
-                      </Text>
-                    </View>
+                    <Image
+                      source={(item.type === 'veg' || item.isVeg || item.item_type === 'VEG') ? icons.veg : icons.nonVeg}
+                      style={styles.vegIconImage}
+                      resizeMode="contain"
+                    />
                     <View style={styles.itemInfo}>
                       <Text style={styles.itemName}>{item.name || item.item_name || 'Item'}</Text>
-                      {categoryText ? (
-                        <Text style={styles.itemCategory}>{categoryText}</Text>
+                      {/* Show option/variant name below product name */}
+                      {optionText ? (
+                        <Text style={styles.itemOption}>{optionText}</Text>
+                      ) : null}
+                      {/* Show addons if available */}
+                      {addonsDisplayText ? (
+                        <Text style={styles.itemCategory}>{addonsDisplayText}</Text>
                       ) : null}
                       {item.specialInstructions && (
                         <Text style={styles.specialInstructions}>Note: {item.specialInstructions}</Text>
+                      )}
+                      {/* Price Breakdown */}
+                      {priceBreakdown && (
+                        <View style={styles.priceBreakdownContainer}>
+                          <View style={styles.priceBreakdownRow}>
+                            <Text style={styles.priceBreakdownLabel}>Item Price:</Text>
+                            <Text style={styles.priceBreakdownValue}>₹{priceBreakdown.item_price?.toFixed(2) || '0.00'}</Text>
+                          </View>
+                          {priceBreakdown.addons_total_price > 0 && (
+                            <View style={styles.priceBreakdownRow}>
+                              <Text style={styles.priceBreakdownLabel}>Addons:</Text>
+                              <Text style={styles.priceBreakdownValue}>₹{priceBreakdown.addons_total_price?.toFixed(2) || '0.00'}</Text>
+                            </View>
+                          )}
+                          <View style={styles.priceBreakdownRow}>
+                            <Text style={styles.priceBreakdownLabel}>Subtotal:</Text>
+                            <Text style={styles.priceBreakdownValue}>₹{priceBreakdown.subtotal?.toFixed(2) || '0.00'}</Text>
+                          </View>
+                          {priceBreakdown.quantity > 1 && (
+                            <View style={styles.priceBreakdownRow}>
+                              <Text style={styles.priceBreakdownLabel}>Qty:</Text>
+                              <Text style={styles.priceBreakdownValue}>x{priceBreakdown.quantity}</Text>
+                            </View>
+                          )}
+                          <View style={[styles.priceBreakdownRow, styles.priceBreakdownTotal]}>
+                            <Text style={styles.priceBreakdownTotalLabel}>Total:</Text>
+                            <Text style={styles.priceBreakdownTotalValue}>₹{priceBreakdown.total_price?.toFixed(2) || '0.00'}</Text>
+                          </View>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -490,30 +633,6 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
           </View>
         </View>
       </ScrollView>
-
-      {/* Delivery Estimate Section - Fixed above buttons */}
-      {orderData.status === 'NEW' && (
-        <View style={styles.deliveryEstimateSection}>
-          <View style={styles.deliveryCircle}>
-            <View style={styles.deliveryCircleInner}>
-              <Text style={styles.deliveryTimeNumber}>{estimatedTime}</Text>
-              <Text style={styles.deliveryTimeLabel}>Mins</Text>
-            </View>
-          </View>
-          <View style={styles.deliveryMessageContainer}>
-            <Text style={styles.deliveryMessage}>
-              Based on your past orders. Driver will arrive accordingly to the ensure on-time and fresh delivery.
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.changeButton}
-            onPress={() => setShowTimePicker(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.changeButtonText}>Change</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* Action Buttons - Only show for NEW orders */}
       {orderData.status === 'NEW' && (
@@ -679,7 +798,7 @@ const styles = StyleSheet.create({
     color: '#4CAF50',
   },
   headerInfo: {
-    marginBottom: 8,
+    marginBottom: 2,
   },
   headerInfoText: {
     fontFamily: Poppins.regular,
@@ -802,6 +921,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
     marginTop: 2,
   },
+  vegIconImage: {
+    width: 20,
+    height: 20,
+    marginRight: 12,
+    marginTop: 2,
+  },
   vegIconGreen: {
     backgroundColor: '#4CAF50',
   },
@@ -822,6 +947,13 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 4,
   },
+  itemOption: {
+    fontFamily: Poppins.regular,
+    fontSize: 13,
+    color: '#666666',
+    marginBottom: 2,
+    fontStyle: 'italic',
+  },
   itemCategory: {
     fontFamily: Poppins.regular,
     fontSize: 12,
@@ -840,6 +972,44 @@ const styles = StyleSheet.create({
     fontFamily: Poppins.regular,
     fontSize: 12,
     color: '#666666',
+  },
+  priceBreakdownContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  priceBreakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  priceBreakdownLabel: {
+    fontFamily: Poppins.regular,
+    fontSize: 11,
+    color: '#666666',
+  },
+  priceBreakdownValue: {
+    fontFamily: Poppins.regular,
+    fontSize: 11,
+    color: '#666666',
+  },
+  priceBreakdownTotal: {
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  priceBreakdownTotalLabel: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 12,
+    color: '#000000',
+  },
+  priceBreakdownTotalValue: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 12,
+    color: '#000000',
   },
   noItemsText: {
     fontFamily: Poppins.regular,
@@ -879,71 +1049,6 @@ const styles = StyleSheet.create({
     fontFamily: Poppins.bold,
     fontSize: 18,
     color: '#000000',
-  },
-  deliveryEstimateSection: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  deliveryCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#C8E6C9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  deliveryCircleInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deliveryTimeNumber: {
-    fontFamily: Poppins.bold,
-    fontSize: 20,
-    color: '#FFFFFF',
-    lineHeight: 24,
-  },
-  deliveryTimeLabel: {
-    fontFamily: Poppins.medium,
-    fontSize: 12,
-    color: '#FFFFFF',
-    marginTop: -2,
-  },
-  deliveryMessageContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  deliveryMessage: {
-    fontFamily: Poppins.regular,
-    fontSize: 12,
-    color: '#000000',
-    lineHeight: 18,
-  },
-  changeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  changeButtonText: {
-    fontFamily: Poppins.semiBold,
-    fontSize: 14,
-    color: '#FF6E1A',
   },
   loadingContainer: {
     flex: 1,

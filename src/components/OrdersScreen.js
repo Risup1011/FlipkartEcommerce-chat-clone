@@ -15,7 +15,9 @@ import {
   Platform,
   Vibration,
   Dimensions,
+  Linking,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Poppins, icons, images } from '../assets';
 import NewOrdersScreen from './NewOrdersScreen';
@@ -23,7 +25,7 @@ import MenuScreen from './MenuScreen';
 import MoreScreen from './MoreScreen';
 import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, RIDER_API_BASE_URL, DEFAULT_RIDER_ID } from '../config';
 
 // Try to import react-native-sound, but handle gracefully if not available
 let Sound = null;
@@ -69,8 +71,13 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   const [isMarkingReady, setIsMarkingReady] = useState(false);
   const [isUpdatingTime, setIsUpdatingTime] = useState(false);
   const [isMarkingPickedUp, setIsMarkingPickedUp] = useState(false);
+  const [isMarkingDelivered, setIsMarkingDelivered] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoicePdfUrl, setInvoicePdfUrl] = useState(null);
+  const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
+  const [useDirectPdf, setUseDirectPdf] = useState(false);
 
   // Update activeBottomTab when initialBottomTab prop changes
   useEffect(() => {
@@ -243,6 +250,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       // Always use the MongoDB ObjectId (id), never fallback to order_number for API calls
       id: apiOrder.id,
       orderNumber: apiOrder.order_number,
+      partnerId: apiOrder.partner_id,
       customerName: apiOrder.customer_name || 'Customer',
       customerPhone: apiOrder.customer_phone,
       amount: apiOrder.total_amount || 0,
@@ -263,6 +271,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       acceptedAt: apiOrder.accepted_at,
       readyAt: apiOrder.ready_at,
       pickedUpAt: apiOrder.picked_up_at,
+      deliveredAt: apiOrder.delivered_at,
       // Rider information (if available in API)
       riderName: apiOrder.rider_name || null,
       riderPhone: apiOrder.rider_phone || null,
@@ -333,8 +342,20 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         const transformedOrders = responseData.data.map((apiOrder, index) => {
           console.log(`🔄 [OrdersScreen] Transforming order ${index + 1}/${responseData.data.length}`);
           console.log(`🔄 [OrdersScreen] Raw API Order:`, JSON.stringify(apiOrder, null, 2));
+          // Log partner_id specifically to help debug invoice integration
+          if (apiOrder.partner_id) {
+            console.log(`🔄 [OrdersScreen] Order ${index + 1} has partner_id: ${apiOrder.partner_id}`);
+          } else {
+            console.warn(`⚠️ [OrdersScreen] Order ${index + 1} missing partner_id in API response`);
+          }
           const transformed = transformOrder(apiOrder);
           console.log(`🔄 [OrdersScreen] Transformed Order:`, JSON.stringify(transformed, null, 2));
+          // Log partnerId in transformed order
+          if (transformed.partnerId) {
+            console.log(`✅ [OrdersScreen] Order ${index + 1} has partnerId after transformation: ${transformed.partnerId}`);
+          } else {
+            console.warn(`⚠️ [OrdersScreen] Order ${index + 1} missing partnerId after transformation`);
+          }
           return transformed;
         });
         
@@ -970,10 +991,10 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       return () => clearInterval(interval);
     }, [estimatedReadyTime]);
     
-    if (!countdown) return <Text style={styles.markReadyButtonText}>Mark ready</Text>;
+    if (!countdown) return <Text style={styles.markReadyButtonTextNew}>Mark ready</Text>;
     
     return (
-      <Text style={styles.markReadyButtonText}>
+      <Text style={styles.markReadyButtonTextNew}>
         Mark ready in {countdown.minutes}:{countdown.seconds.toString().padStart(2, '0')} min
       </Text>
     );
@@ -1136,18 +1157,23 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.log(`📡 [OrdersScreen] Order ID: ${order.id}`);
       console.log(`📡 [OrdersScreen] Order Number: ${order.orderNumber}`);
       
-      // Use partner API endpoint
-      // Note: The API documentation shows this endpoint is for rider app
-      // If backend doesn't have partner endpoint, this will return 500 error
-      // Backend needs to implement: PUT /partner/api/v1/orders/{orderId}/mark-picked-up
-      const url = `${API_BASE_URL}v1/orders/${order.id}/mark-picked-up`;
+      // Use rider API endpoint for marking order as picked up
+      // This endpoint is specifically for the rider app: PUT /rider/api/v1/orders/{orderId}/mark-picked-up
+      // Requires X-Rider-Id header
+      const url = `${RIDER_API_BASE_URL}v1/orders/${order.id}/mark-picked-up`;
       console.log(`📡 [OrdersScreen] Endpoint: ${url}`);
-      console.log(`📡 [OrdersScreen] Note: This endpoint may need to be implemented on backend for partner app`);
+      console.log(`📡 [OrdersScreen] Using rider API endpoint for marking order as picked up`);
+      
+      // Get rider ID from order if available, otherwise use default
+      // TODO: Replace with actual rider ID from order assignment or user context
+      const riderId = order.riderId || DEFAULT_RIDER_ID;
+      console.log(`📡 [OrdersScreen] Using Rider ID: ${riderId}`);
 
       const response = await fetchWithAuth(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'X-Rider-Id': riderId,
         },
       });
 
@@ -1217,99 +1243,321 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     }
   };
 
-  // Generate dummy order data for styling PREPARING card
-  const getDummyPreparingOrder = () => {
-    const now = new Date();
-    const readyTime = new Date(now.getTime() + 25 * 60000); // 25 minutes from now
-    
-    return {
-      id: 'dummy-preparing-order',
-      orderNumber: '#1234',
-      customerName: 'John Doe',
-      customerPhone: '+919876543210',
-      amount: 1250.75,
-      time: '5 mins ago',
-      timeDisplay: '02:30 PM',
-      dateDisplay: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }),
-      items: [
-        { name: 'Chicken Biryani', quantity: 2, price: 0 },
-        { name: 'Naan Bread x 2', quantity: 1, price: 0 },
-      ],
-      itemCount: 3,
-      itemsPreview: 'Chicken Biryani x 2, Naan Bread x 2',
-      deliveryAddress: '123 Main Street, City, State 12345',
-      estimatedTime: 30,
-      estimatedReadyTime: readyTime.toISOString(),
-      status: 'PREPARING',
-      statusDisplay: 'Preparing',
-      paymentMethod: 'ONLINE',
-      isAssignedToRider: false,
-      createdAt: new Date(now.getTime() - 5 * 60000).toISOString(),
-      acceptedAt: new Date(now.getTime() - 5 * 60000).toISOString(),
-      readyAt: null,
-      pickedUpAt: null,
-      riderName: null,
-      riderPhone: null,
-      riderImage: null,
-      contactNumber: '+919876543210',
-      packagingCharge: 0,
-      gst: 0,
-      deliveryTime: null,
-      deliveryDistance: null,
-      deliveryRating: null,
-      estimatedArrivalTime: null,
-      isDummy: true, // Flag to identify dummy data
-    };
+  // Mark order as delivered API
+  const handleMarkOrderDelivered = async (order) => {
+    if (!order || !order.id) {
+      showToast('Order ID not available', 'error');
+      return;
+    }
+
+    setIsMarkingDelivered(true);
+    try {
+      console.log('📡 [OrdersScreen] ========================================');
+      console.log('📡 [OrdersScreen] MARKING ORDER AS DELIVERED');
+      console.log('📡 [OrdersScreen] ========================================');
+      console.log(`📡 [OrdersScreen] Order ID: ${order.id}`);
+      console.log(`📡 [OrdersScreen] Order Number: ${order.orderNumber}`);
+      
+      // Use rider API endpoint for marking order as delivered
+      // This endpoint is specifically for the rider app: PUT /rider/api/v1/orders/{orderId}/mark-delivered
+      // Requires X-Rider-Id header
+      const url = `${RIDER_API_BASE_URL}v1/orders/${order.id}/mark-delivered`;
+      console.log(`📡 [OrdersScreen] Endpoint: ${url}`);
+      console.log(`📡 [OrdersScreen] Using rider API endpoint for marking order as delivered`);
+      
+      // Get rider ID from order if available, otherwise use default
+      // TODO: Replace with actual rider ID from order assignment or user context
+      const riderId = order.riderId || DEFAULT_RIDER_ID;
+      console.log(`📡 [OrdersScreen] Using Rider ID: ${riderId}`);
+
+      const response = await fetchWithAuth(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Rider-Id': riderId,
+        },
+      });
+
+      const responseData = await response.json();
+      
+      console.log(`📡 [OrdersScreen] Response Status: ${response.status}`);
+      console.log(`📡 [OrdersScreen] Response Code: ${responseData?.code}`);
+      console.log(`📡 [OrdersScreen] Response Message: ${responseData?.message || 'N/A'}`);
+
+      if (response.ok && responseData?.code === 200) {
+        console.log('✅ [OrdersScreen] ========================================');
+        console.log('✅ [OrdersScreen] ORDER MARKED AS DELIVERED SUCCESSFULLY');
+        console.log('✅ [OrdersScreen] ========================================');
+        console.log('📋 [OrdersScreen] Updated Order Data:', JSON.stringify(responseData.data, null, 2));
+        
+        showToast('Order marked as delivered', 'success');
+        
+        // Remove order from PICKED_UP list immediately
+        setOrdersByStatus(prev => ({
+          ...prev,
+          PICKED_UP: prev.PICKED_UP.filter(o => o.id !== order.id),
+        }));
+        
+        // Switch to Past Orders tab to show the delivered order
+        if (activeTab === 'pickedUp') {
+          setActiveTab('pastOrders');
+          
+          // Scroll to past orders tab
+          setTimeout(() => {
+            if (tabsScrollViewRef.current && tabPositions.current['pastOrders'] !== undefined) {
+              tabsScrollViewRef.current.scrollTo({
+                x: tabPositions.current['pastOrders'] - 20,
+                animated: true,
+              });
+            }
+          }, 100);
+        }
+        
+        // Refresh orders after marking delivered
+        setTimeout(() => {
+          fetchOrdersForTab('pastOrders');
+          fetchNewOrders();
+        }, 500);
+      } else {
+        console.error('❌ [OrdersScreen] ========================================');
+        console.error(`❌ [OrdersScreen] FAILED TO MARK ORDER AS DELIVERED`);
+        console.error('❌ [OrdersScreen] ========================================');
+        console.error(`❌ [OrdersScreen] HTTP Status: ${response.status}`);
+        console.error(`❌ [OrdersScreen] Response Code: ${responseData?.code}`);
+        console.error(`❌ [OrdersScreen] Response Message: ${responseData?.message || 'N/A'}`);
+        console.error(`❌ [OrdersScreen] Full Response:`, JSON.stringify(responseData, null, 2));
+        
+        const errorMessage = responseData?.message || 'Failed to mark order as delivered';
+        showToast(errorMessage, 'error');
+      }
+    } catch (error) {
+      console.error('❌ [OrdersScreen] ========================================');
+      console.error(`❌ [OrdersScreen] EXCEPTION MARKING ORDER AS DELIVERED`);
+      console.error('❌ [OrdersScreen] ========================================');
+      console.error(`❌ [OrdersScreen] Error:`, error);
+      console.error(`❌ [OrdersScreen] Error Message:`, error?.message);
+      console.error(`❌ [OrdersScreen] Error Stack:`, error?.stack);
+      
+      showToast('Error marking order as delivered. Please try again.', 'error');
+    } finally {
+      setIsMarkingDelivered(false);
+    }
   };
 
-  // Generate dummy order data for styling PICKED_UP card
-  const getDummyPickedUpOrder = () => {
-    const now = new Date();
-    const pickedUpTime = new Date(now.getTime() - 5 * 60000); // 5 minutes ago
+  // Handle viewing invoice
+  const handleViewInvoice = async (order) => {
+    if (!order) {
+      showToast('Order information not available', 'error');
+      return;
+    }
+
+    // Validate order ID - must be a valid MongoDB ObjectId (24 hex characters)
+    if (!order.id) {
+      console.error('❌ [OrdersScreen] Order ID is missing');
+      console.error('❌ [OrdersScreen] Order object:', JSON.stringify(order, null, 2));
+      showToast('Order ID not available', 'error');
+      return;
+    }
+
+    // Get order ID - try multiple possible fields
+    let orderIdStr = null;
     
-    return {
-      id: 'dummy-picked-up-order',
-      orderNumber: '#5678',
-      customerName: 'Jane Smith',
-      customerPhone: '+919876543211',
-      amount: 890.50,
-      time: '10 mins ago',
-      timeDisplay: '03:45 PM',
-      dateDisplay: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }),
-      items: [
-        { name: 'Veg Pizza', quantity: 1, price: 0 },
-        { name: 'Garlic Bread x 2', quantity: 1, price: 0 },
-      ],
-      itemCount: 2,
-      itemsPreview: 'Veg Pizza x 1, Garlic Bread x 2',
-      deliveryAddress: '456 Park Avenue, City, State 12345',
-      status: 'PICKED_UP',
-      statusDisplay: 'On the Way',
-      paymentMethod: 'ONLINE',
-      isAssignedToRider: true,
-      riderName: 'Raj Kumar',
-      riderPhone: '+919876543212',
-      riderImage: null,
-      createdAt: new Date(now.getTime() - 30 * 60000).toISOString(),
-      acceptedAt: new Date(now.getTime() - 25 * 60000).toISOString(),
-      readyAt: new Date(now.getTime() - 10 * 60000).toISOString(),
-      pickedUpAt: pickedUpTime.toISOString(),
-      deliveredAt: null,
-      contactNumber: '+919876543211',
-      packagingCharge: 0,
-      gst: 0,
-      deliveryTime: null,
-      deliveryDistance: null,
-      deliveryRating: null,
-      estimatedArrivalTime: new Date(now.getTime() + 10 * 60000).toISOString(), // 10 minutes from now
-      isDummy: true, // Flag to identify dummy data
-    };
+    // First, try order.id (should be MongoDB ObjectId)
+    if (order.id) {
+      const idStr = String(order.id).trim();
+      // Check if it's a valid MongoDB ObjectId (24 hex characters)
+      if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
+        orderIdStr = idStr;
+        console.log('✅ [OrdersScreen] Using order.id (MongoDB ObjectId):', orderIdStr);
+      } else {
+        console.warn('⚠️ [OrdersScreen] order.id is not a valid MongoDB ObjectId:', idStr);
+        console.warn('⚠️ [OrdersScreen] Order ID format:', idStr);
+        console.warn('⚠️ [OrdersScreen] Order Number:', order.orderNumber);
+      }
+    }
+    
+    // If order.id is not valid, we cannot proceed (API requires MongoDB ObjectId)
+    if (!orderIdStr) {
+      console.error('❌ [OrdersScreen] ========================================');
+      console.error('❌ [OrdersScreen] INVALID ORDER ID FOR INVOICE');
+      console.error('❌ [OrdersScreen] ========================================');
+      console.error('❌ [OrdersScreen] Order ID (raw):', order.id);
+      console.error('❌ [OrdersScreen] Order ID Type:', typeof order.id);
+      console.error('❌ [OrdersScreen] Order Number:', order.orderNumber);
+      console.error('❌ [OrdersScreen] Order Status:', order.status);
+      console.error('❌ [OrdersScreen] Full Order Object:', JSON.stringify(order, null, 2));
+      showToast('Invalid order ID. Cannot fetch invoice.', 'error');
+      return;
+    }
+
+    setIsLoadingInvoice(true);
+    setShowInvoiceModal(true);
+    setInvoicePdfUrl(null);
+    setUseDirectPdf(false);
+
+    try {
+      console.log('📄 [OrdersScreen] ========================================');
+      console.log('📄 [OrdersScreen] FETCHING INVOICE FROM BACKEND');
+      console.log('📄 [OrdersScreen] ========================================');
+      console.log('📄 [OrdersScreen] Order ID:', orderIdStr);
+      console.log('📄 [OrdersScreen] Order ID Type:', typeof order.id);
+      console.log('📄 [OrdersScreen] Order Number:', order.orderNumber);
+      console.log('📄 [OrdersScreen] Order Status:', order.status);
+      console.log('📄 [OrdersScreen] Full Order Object Keys:', Object.keys(order));
+      
+      // Call backend API to get/create invoice
+      // This endpoint will create the invoice if it doesn't exist
+      const url = `${API_BASE_URL}v1/orders/${orderIdStr}/invoice`;
+      console.log('📄 [OrdersScreen] Invoice API URL:', url);
+      console.log('📄 [OrdersScreen] API Base URL:', API_BASE_URL);
+      console.log('📄 [OrdersScreen] Note: This endpoint will CREATE invoice if it does not exist');
+
+      const response = await fetchWithAuth(url, {
+        method: 'GET',
+      });
+
+      console.log('📄 [OrdersScreen] HTTP Response Status:', response.status);
+      console.log('📄 [OrdersScreen] HTTP Response OK:', response.ok);
+
+      const responseData = await response.json();
+      
+      console.log('📄 [OrdersScreen] Response Code:', responseData?.code);
+      console.log('📄 [OrdersScreen] Response Status:', responseData?.status);
+      console.log('📄 [OrdersScreen] Response Message:', responseData?.message || 'N/A');
+      console.log('📄 [OrdersScreen] Has Data:', !!responseData?.data);
+      console.log('📄 [OrdersScreen] Has PDF URL:', !!responseData?.data?.pdf_url);
+      
+      if (responseData?.data) {
+        console.log('📄 [OrdersScreen] Response Data Keys:', Object.keys(responseData.data));
+        console.log('📄 [OrdersScreen] Full Response Data:', JSON.stringify(responseData.data, null, 2));
+      }
+
+      // Check if invoice was successfully created/fetched
+      if (response.ok && responseData?.code === 200) {
+        // Check if PDF URL exists in response
+        if (responseData?.data?.pdf_url) {
+          const pdfUrl = responseData.data.pdf_url;
+          console.log('✅ [OrdersScreen] Invoice created/fetched successfully');
+          console.log('✅ [OrdersScreen] PDF URL:', pdfUrl);
+          console.log('✅ [OrdersScreen] PDF URL Protocol:', pdfUrl.startsWith('https') ? 'HTTPS' : pdfUrl.startsWith('http') ? 'HTTP' : 'UNKNOWN');
+          console.log('✅ [OrdersScreen] Invoice Number:', responseData.data.invoice_number);
+          console.log('✅ [OrdersScreen] Invoice ID:', responseData.data.invoice_id);
+          console.log('✅ [OrdersScreen] Invoice Status:', responseData.data.status);
+          
+            // Convert HTTP URLs to HTTPS S3 URLs
+            let finalPdfUrl = pdfUrl;
+            const isHttps = pdfUrl.startsWith('https://');
+            const isHttp = pdfUrl.startsWith('http://');
+            
+            if (isHttp) {
+              // Extract the path from HTTP URL and convert to HTTPS S3 URL
+              // Example: http://kamai24-stage.../invoices/partners/PARTCIAN1SOF/invoices/INV-2025-2438.pdf
+              // Convert to: https://dev-kamai24.s3.amazonaws.com/partners/PARTCIAN1SOF/invoices/INV-2025-2438.pdf
+              try {
+                const urlObj = new URL(pdfUrl);
+                const pathParts = urlObj.pathname.split('/').filter(part => part !== ''); // Remove empty strings
+                
+                console.log('🔄 [OrdersScreen] Path parts:', pathParts);
+                
+                // Find the index of 'partners' in the path
+                const partnersIndex = pathParts.findIndex(part => part === 'partners');
+                
+                if (partnersIndex !== -1) {
+                  // Extract everything from 'partners' onwards (including 'partners')
+                  const s3Path = pathParts.slice(partnersIndex).join('/');
+                  finalPdfUrl = `https://dev-kamai24.s3.amazonaws.com/${s3Path}`;
+                  console.log('🔄 [OrdersScreen] Converting HTTP URL to HTTPS S3 URL');
+                  console.log('🔄 [OrdersScreen] Original URL:', pdfUrl);
+                  console.log('🔄 [OrdersScreen] S3 Path:', s3Path);
+                  console.log('🔄 [OrdersScreen] Converted URL:', finalPdfUrl);
+                } else {
+                  // Fallback: try to extract invoice filename and partner from URL pattern
+                  // Look for pattern: .../invoices/INV-YYYY-XXXX.pdf
+                  const invoiceMatch = pdfUrl.match(/\/invoices\/(INV-\d{4}-\d+\.pdf)/);
+                  if (invoiceMatch) {
+                    const invoiceFileName = invoiceMatch[1];
+                    // Try to extract partner ID from URL path or use from response data
+                    const partnerMatch = pdfUrl.match(/\/partners\/([^\/]+)/);
+                    const partnerId = partnerMatch ? partnerMatch[1] : (responseData?.data?.partner_id || responseData?.partner_id || 'PARTCIAN1SOF');
+                    finalPdfUrl = `https://dev-kamai24.s3.amazonaws.com/partners/${partnerId}/invoices/${invoiceFileName}`;
+                    console.log('🔄 [OrdersScreen] Using fallback conversion method');
+                    console.log('🔄 [OrdersScreen] Invoice filename:', invoiceFileName);
+                    console.log('🔄 [OrdersScreen] Partner ID:', partnerId);
+                    console.log('🔄 [OrdersScreen] Converted URL:', finalPdfUrl);
+                  } else {
+                    console.warn('⚠️ [OrdersScreen] Could not find "partners" or invoice pattern in HTTP URL path');
+                    console.warn('⚠️ [OrdersScreen] Using original HTTP URL');
+                  }
+                }
+              } catch (error) {
+                console.error('❌ [OrdersScreen] Error converting HTTP URL to HTTPS:', error);
+                console.error('❌ [OrdersScreen] Error details:', error.message);
+                console.warn('⚠️ [OrdersScreen] Using original HTTP URL');
+              }
+            }
+          
+          // Use Google Docs Viewer for all URLs (now all should be HTTPS)
+          const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(finalPdfUrl)}&embedded=true`;
+          console.log('✅ [OrdersScreen] Using Google Docs Viewer to display PDF');
+          console.log('✅ [OrdersScreen] Final PDF URL:', finalPdfUrl);
+          console.log('✅ [OrdersScreen] Viewer URL:', viewerUrl);
+          setInvoicePdfUrl(viewerUrl);
+          setUseDirectPdf(false);
+        } else {
+          // Invoice was created but PDF URL is missing
+          console.error('❌ [OrdersScreen] Invoice created but PDF URL is missing');
+          console.error('❌ [OrdersScreen] Response Data:', JSON.stringify(responseData.data, null, 2));
+          showToast('Invoice created but PDF URL not available. Please try again.', 'error');
+          setShowInvoiceModal(false);
+        }
+      } else {
+        // API returned an error
+        console.error('❌ [OrdersScreen] ========================================');
+        console.error('❌ [OrdersScreen] FAILED TO CREATE/FETCH INVOICE');
+        console.error('❌ [OrdersScreen] ========================================');
+        console.error('❌ [OrdersScreen] Order ID:', orderIdStr);
+        console.error('❌ [OrdersScreen] Order Number:', order.orderNumber);
+        console.error('❌ [OrdersScreen] HTTP Status:', response.status);
+        console.error('❌ [OrdersScreen] Response Code:', responseData?.code);
+        console.error('❌ [OrdersScreen] Response Status:', responseData?.status);
+        console.error('❌ [OrdersScreen] Response Message:', responseData?.message || 'N/A');
+        console.error('❌ [OrdersScreen] Full Response:', JSON.stringify(responseData, null, 2));
+        
+        // Provide more helpful error message
+        let errorMessage = responseData?.message || `Failed to create/fetch invoice (Status: ${response.status})`;
+        
+        // Check for specific error cases
+        if (response.status === 404) {
+          errorMessage = 'Order not found. Cannot create invoice.';
+        } else if (response.status === 400) {
+          errorMessage = responseData?.message || 'Invalid order. Cannot create invoice.';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error while creating invoice. Please try again.';
+        }
+        
+        showToast(errorMessage, 'error');
+        setShowInvoiceModal(false);
+      }
+    } catch (error) {
+      console.error('❌ [OrdersScreen] ========================================');
+      console.error(`❌ [OrdersScreen] EXCEPTION FETCHING INVOICE`);
+      console.error('❌ [OrdersScreen] ========================================');
+      console.error('❌ [OrdersScreen] Order ID:', order.id);
+      console.error('❌ [OrdersScreen] Order Number:', order.orderNumber);
+      console.error(`❌ [OrdersScreen] Error Type:`, error?.constructor?.name || 'Unknown');
+      console.error(`❌ [OrdersScreen] Error:`, error);
+      console.error(`❌ [OrdersScreen] Error Message:`, error?.message);
+      console.error(`❌ [OrdersScreen] Error Stack:`, error?.stack);
+      
+      showToast('Error fetching invoice. Please try again.', 'error');
+      setShowInvoiceModal(false);
+    } finally {
+      setIsLoadingInvoice(false);
+    }
   };
 
   // Render PREPARING order card
   const renderPreparingCard = (order) => {
-    const isDummy = order.isDummy;
-    
     // Log order details for debugging
     console.log('🎨 [OrdersScreen] Rendering PREPARING card:', {
       orderNumber: order.orderNumber,
@@ -1318,76 +1566,78 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       estimatedTime: order.estimatedTime,
       estimatedReadyTime: order.estimatedReadyTime,
       acceptedAt: order.acceptedAt,
-      isDummy: isDummy,
     });
     
     return (
-      <View style={[styles.preparingCard, isDummy && { opacity: 0.9 }]}>
-        {/* PREPARING Banner - Similar to READY/DELIVERED banner */}
-        <View style={styles.preparingBanner}>
-          <Text style={styles.preparingBannerText}>
-            {order.statusDisplay || 'PREPARING'}
-          </Text>
-        </View>
-        
+      <View style={styles.preparingCardNew}>
+        {/* Header: Date (left), Status (center), Time (right) */}
         <View style={styles.preparingCardHeader}>
-          <Text style={styles.preparingOrderNumber}>
-            {order.orderNumber || `#${order.id?.slice(-6) || 'N/A'}`}
+          <Text style={styles.preparingCardDate}>
+            {order.acceptedAt 
+              ? formatDate(order.acceptedAt) 
+              : (order.dateDisplay || '')}
+          </Text>
+          <Text style={styles.preparingCardStatus}>{order.statusDisplay || 'Preparing'}</Text>
+          <Text style={styles.preparingCardTime}>
+            {order.acceptedAt 
+              ? formatTimeDisplay(order.acceptedAt) 
+              : (order.timeDisplay || '')}
           </Text>
         </View>
         
-        <Text style={styles.preparingOrderDetails}>
-          {order.timeDisplay || order.time || 'Just now'} | ₹{order.amount?.toFixed(2) || '0.00'} | {order.itemsPreview || `${order.itemCount || 0} items`}
+        {/* Order Number */}
+        <Text style={styles.preparingOrderNumberNew}>
+          {order.orderNumber ? `#${order.orderNumber}` : (order.id ? `#${order.id.slice(-4)}` : '#N/A')}
         </Text>
         
-        {/* Show preparation time if available */}
-        {order.estimatedTime && (
-          <Text style={styles.preparingTimeInfo}>
-            Preparation Time: {order.estimatedTime} minutes
+        {/* Order Summary Line */}
+        <View style={styles.preparingOrderInfoNew}>
+          <Text style={styles.preparingOrderDetailsNew} numberOfLines={1}>
+            {order.timeDisplay ? `${order.timeDisplay} | ` : ''}₹{order.amount?.toFixed(2) || '0.00'}
           </Text>
-        )}
+        </View>
         
+        {/* Items Preview */}
+        <Text style={styles.preparingItemsPreview} numberOfLines={1}>
+          {order.itemsPreview || `${order.itemCount || 0} items`}
+        </Text>
+        
+        {/* Dashed Line */}
         <View style={styles.dashedLine} />
         
-        <View style={styles.deAssignmentSection}>
-          <Text style={styles.deAssignmentText}>DE will be assigned as prep time</Text>
+        {/* DE Assignment Section */}
+        <View style={styles.deAssignmentSectionNew}>
+          <Text style={styles.deAssignmentTextNew}>DE will be assigned as prep time</Text>
           <Image
             source={icons.de}
-            style={styles.deIcon}
+            style={styles.deIconNew}
             resizeMode="contain"
           />
         </View>
         
+        {/* Dashed Line */}
         <View style={styles.dashedLine} />
         
-        <View style={styles.preparingActions}>
+        {/* Bottom Actions: Mark Ready + Add Time */}
+        <View style={styles.preparingActionsNew}>
           <TouchableOpacity
-            style={[styles.markReadyButton, (isMarkingReady || isDummy) && styles.markReadyButtonDisabled]}
-            onPress={() => {
-              if (!isDummy) {
-                handleMarkOrderReady(order);
-              }
-            }}
-            activeOpacity={isDummy ? 1 : 0.7}
-            disabled={isMarkingReady || isDummy}
+            style={[styles.markReadyButtonNew, isMarkingReady && styles.markReadyButtonDisabledNew]}
+            onPress={() => handleMarkOrderReady(order)}
+            activeOpacity={0.7}
+            disabled={isMarkingReady}
           >
             {isMarkingReady ? (
-              <ActivityIndicator size="small" color="#FF6E1A" />
+              <ActivityIndicator size="small" color="#8B4513" />
             ) : (
               <PreparingCountdown estimatedReadyTime={order.estimatedReadyTime} />
             )}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.addButton, { marginLeft: 12 }, isDummy && styles.addButtonDisabled]}
-            onPress={() => {
-              if (!isDummy) {
-                openTimePicker(order);
-              }
-            }}
-            activeOpacity={isDummy ? 1 : 0.7}
-            disabled={isDummy}
+            style={styles.addTimeButton}
+            onPress={() => openTimePicker(order)}
+            activeOpacity={0.7}
           >
-            <Text style={styles.addButtonText}>+</Text>
+            <Text style={styles.addTimeButtonText}>+</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1396,64 +1646,59 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
   // Render READY order card
   const renderReadyCard = (order) => {
-    // Calculate time elapsed since ready or accepted
-    const timeElapsed = order.readyAt 
-      ? Math.floor((new Date() - new Date(order.readyAt)) / 60000)
-      : order.acceptedAt
-      ? Math.floor((new Date() - new Date(order.acceptedAt)) / 60000)
-      : Math.floor((new Date() - new Date(order.createdAt)) / 60000);
-    
-    // Truncate items preview to match design
-    const itemsPreview = order.itemsPreview || 'Items';
-    const truncatedItems = itemsPreview.length > 30 ? itemsPreview.substring(0, 30) + '...' : itemsPreview;
-    
     return (
-      <View style={styles.readyCard}>
-        {/* Top Left - Circular Countdown Timer */}
-        <View style={styles.readyCountdownContainer}>
-          <View style={styles.readyCountdownCircle}>
-            <Text style={styles.readyCountdownNumber}>{timeElapsed}</Text>
-            <Text style={styles.readyCountdownLabel}>Mins</Text>
-          </View>
-        </View>
-        
-        {/* Top Right - READY Tag with rounded right edge */}
-        <View style={styles.readyBanner}>
-          <Text style={styles.readyBannerText}>READY</Text>
+      <View style={styles.readyCardNew}>
+        {/* Header: Date (left), Status (center), Time (right) */}
+        <View style={styles.readyCardHeader}>
+          <Text style={styles.readyCardDate}>
+            {order.readyAt 
+              ? formatDate(order.readyAt) 
+              : (order.dateDisplay || '')}
+          </Text>
+          <Text style={styles.readyCardStatus}>{order.statusDisplay || 'Ready'}</Text>
+          <Text style={styles.readyCardTime}>
+            {order.readyAt 
+              ? formatTimeDisplay(order.readyAt) 
+              : (order.timeDisplay || '')}
+          </Text>
         </View>
         
         {/* Order Number */}
-        <Text style={styles.readyOrderNumber}>
-          {order.orderNumber || `#${order.id?.slice(-4) || 'N/A'}`}
+        <Text style={styles.readyOrderNumberNew}>
+          {order.orderNumber ? `#${order.orderNumber}` : (order.id ? `#${order.id.slice(-4)}` : '#N/A')}
         </Text>
         
         {/* Order Summary Line */}
-        <View style={styles.readyOrderInfo}>
-          <Text style={styles.readyOrderDetails} numberOfLines={1}>
-            {order.timeDisplay || '12:55'} | {truncatedItems}
+        <View style={styles.readyOrderInfoNew}>
+          <Text style={styles.readyOrderDetailsNew} numberOfLines={1}>
+            {order.timeDisplay ? `${order.timeDisplay} | ` : ''}{order.itemsPreview || ''}
           </Text>
-          <Text style={styles.readyOrderAmount}>₹{order.amount.toFixed(2)}</Text>
+          <Text style={styles.readyOrderAmountNew}>₹{order.amount?.toFixed(2) || '0.00'}</Text>
         </View>
         
-        {/* Bottom Actions */}
-        <View style={styles.readyActions}>
+        {/* Bottom Actions: Food Ready + Track Delivery */}
+        <View style={styles.readyActionsNew}>
           <TouchableOpacity
-            style={styles.foodReadyContainer}
+            style={[styles.foodReadyButton, isMarkingPickedUp && styles.foodReadyButtonDisabled]}
             onPress={() => handleMarkOrderPickedUp(order)}
             activeOpacity={0.7}
             disabled={isMarkingPickedUp}
           >
-
-            <Text style={styles.foodReadyText}>Food Ready</Text>
+            {isMarkingPickedUp ? (
+              <ActivityIndicator size="small" color="#666666" />
+            ) : (
+              <Text style={styles.foodReadyButtonText} numberOfLines={1}>Food Ready</Text>
+            )}
           </TouchableOpacity>
           <TouchableOpacity
+            style={styles.trackDeliveryButtonReady}
             onPress={() => {
               // TODO: Track delivery
               showToast('Track delivery', 'info');
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.trackDeliveryText}>Track Delivery</Text>
+            <Text style={styles.trackDeliveryButtonTextReady} numberOfLines={1}>Track Delivery</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1494,147 +1739,227 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
   // Render PICKED_UP order card
   const renderPickedUpCard = (order) => {
-    const isDummy = order.isDummy;
     const isDelivered = order.status === 'DELIVERED' || order.status === 'COMPLETED' || order.deliveredAt;
     const statusText = isDelivered ? 'Delivered' : 'On the Way';
     
-    // Format delivery stats from backend data
+    // Format delivery stats from backend data (show "0" if not available)
     const deliveryTime = order.deliveryTime 
       ? (typeof order.deliveryTime === 'number' ? `${order.deliveryTime}min` : order.deliveryTime)
-      : null;
+      : '0min';
     const deliveryDistance = order.deliveryDistance 
       ? (typeof order.deliveryDistance === 'number' ? `${order.deliveryDistance}km` : order.deliveryDistance)
-      : null;
+      : '0km';
     const deliveryRating = order.deliveryRating 
       ? (typeof order.deliveryRating === 'number' ? order.deliveryRating.toFixed(1) : order.deliveryRating)
-      : null;
+      : '0';
     
+    // For DELIVERED status, use new design
+    if (isDelivered) {
+      return (
+        <View style={styles.deliveredCard}>
+          {/* Header: Date (left), Status (center), Time (right) */}
+          <View style={styles.deliveredCardHeader}>
+            <Text style={styles.deliveredCardDate}>
+              {order.deliveredAt 
+                ? formatDate(order.deliveredAt) 
+                : (order.pickedUpAt 
+                  ? formatDate(order.pickedUpAt) 
+                  : (order.dateDisplay || ''))}
+            </Text>
+            <Text style={styles.deliveredCardStatus}>{order.statusDisplay || 'Delivered'}</Text>
+            <Text style={styles.deliveredCardTime}>
+              {order.deliveredAt 
+                ? formatTimeDisplay(order.deliveredAt) 
+                : (order.pickedUpAt 
+                  ? formatTimeDisplay(order.pickedUpAt) 
+                  : (order.timeDisplay || ''))}
+            </Text>
+          </View>
+          
+          {/* Order Number */}
+          <Text style={styles.deliveredOrderNumber}>
+            {order.orderNumber ? `#${order.orderNumber}` : (order.id ? `#${order.id.slice(-4)}` : '#N/A')}
+          </Text>
+          
+          {/* Order Summary Line */}
+          <View style={styles.deliveredOrderInfo}>
+            <Text style={styles.deliveredOrderDetails} numberOfLines={1}>
+              {order.timeDisplay ? `${order.timeDisplay} | ` : ''}{order.itemsPreview || ''}
+            </Text>
+            <Text style={styles.deliveredOrderAmount}>₹{order.amount?.toFixed(2) || '0.00'}</Text>
+          </View>
+          
+          {/* Dashed Line */}
+          <View style={styles.dashedLine} />
+          
+          {/* Rider Details Section */}
+          {(order.riderName || order.riderPhone) && (
+            <>
+              <Text style={styles.riderDetailsHeading}>Rider Details</Text>
+              <View style={styles.riderDetailsSection}>
+                <View style={styles.riderAvatar}>
+                  {order.riderImage ? (
+                    <Image
+                      source={{ uri: order.riderImage }}
+                      style={styles.riderAvatarImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.riderAvatarText}>
+                      {(order.riderName || 'R').charAt(0).toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.riderDetailsInfo}>
+                  <Text style={styles.riderDetailsName}>
+                    Name: {order.riderName || ''}
+                  </Text>
+                  <Text style={styles.riderDetailsPhone}>
+                    Phone No: {order.riderPhone || ''}
+                  </Text>
+                </View>
+              </View>
+              
+              {/* Dashed Line */}
+              <View style={styles.dashedLine} />
+            </>
+          )}
+          
+          {/* Bottom Actions: View Invoice + Delivery Stats */}
+          <View style={styles.deliveredActions}>
+            <TouchableOpacity
+              style={styles.viewInvoiceButtonOutlined}
+              onPress={() => handleViewInvoice(order)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.viewInvoiceButtonTextOutlined}>View Invoice</Text>
+            </TouchableOpacity>
+            
+            {/* Always show delivery stats icons (show "0" if backend data not available) */}
+            <View style={styles.deliveryStatsContainer}>
+              <View style={[styles.deliveredDeliveryStatItem, { marginLeft: 0 }]}>
+                <Image
+                  source={icons.time}
+                  style={styles.deliveredDeliveryStatIcon}
+                  resizeMode="contain"
+                />
+                <Text style={styles.deliveredDeliveryStatText}>{deliveryTime}</Text>
+              </View>
+              <View style={styles.deliveredDeliveryStatItem}>
+                <Image
+                  source={icons.location}
+                  style={styles.deliveredDeliveryStatIcon}
+                  resizeMode="contain"
+                />
+                <Text style={styles.deliveredDeliveryStatText}>{deliveryDistance}</Text>
+              </View>
+              <View style={styles.deliveredDeliveryStatItem}>
+                <Image
+                  source={icons.star}
+                  style={styles.deliveredDeliveryStatIcon}
+                  resizeMode="contain"
+                />
+                <Text style={styles.deliveredDeliveryStatText}>{deliveryRating}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      );
+    }
+    
+    // For PICKED_UP (On the Way) status, use new design matching delivered card
     return (
-      <View style={[styles.pickedUpCard, isDelivered && styles.pickedUpCardDelivered, isDummy && { opacity: 0.9 }]}>
-        {/* DELIVERED Banner - Similar to READY banner */}
-        {isDelivered && (
-          <View style={styles.deliveredBanner}>
-            <Text style={styles.deliveredBannerText}>DELIVERED</Text>
-          </View>
-        )}
-        
-        {/* On the Way Banner - Similar to READY banner */}
-        {!isDelivered && (
-          <View style={styles.pickedUpBanner}>
-            <Text style={styles.pickedUpBannerText}>{statusText.toUpperCase()}</Text>
-          </View>
-        )}
-        
-        <View style={styles.pickedUpHeader}>
-          <Text style={styles.pickedUpDate}>{order.dateDisplay}</Text>
+      <View style={styles.pickedUpCardNew}>
+        {/* Header: Date (left), Status (center), Time (right) */}
+        <View style={styles.pickedUpCardHeader}>
+          <Text style={styles.pickedUpCardDate}>
+            {order.pickedUpAt 
+              ? formatDate(order.pickedUpAt) 
+              : (order.dateDisplay || '')}
+          </Text>
+          <Text style={styles.pickedUpCardStatus}>{order.statusDisplay || 'On the Way'}</Text>
+          <Text style={styles.pickedUpCardTime}>
+            {order.pickedUpAt 
+              ? formatTimeDisplay(order.pickedUpAt) 
+              : (order.timeDisplay || '')}
+          </Text>
         </View>
         
         {/* Order Number */}
-        <Text style={styles.pickedUpOrderNumber}>
-          {order.orderNumber || `#${order.id?.slice(-4) || 'N/A'}`}
+        <Text style={styles.pickedUpOrderNumberNew}>
+          {order.orderNumber ? `#${order.orderNumber}` : (order.id ? `#${order.id.slice(-4)}` : '#N/A')}
         </Text>
         
         {/* Order Summary Line */}
-        <View style={styles.pickedUpOrderInfo}>
-          <Text style={styles.pickedUpOrderDetails} numberOfLines={1}>
-            {order.timeDisplay || '12:55'} | {order.itemsPreview || 'Items'}
+        <View style={styles.pickedUpOrderInfoNew}>
+          <Text style={styles.pickedUpOrderDetailsNew} numberOfLines={1}>
+            {order.timeDisplay ? `${order.timeDisplay} | ` : ''}{order.itemsPreview || ''}
           </Text>
-          <Text style={styles.pickedUpOrderAmount}>₹{order.amount.toFixed(2)}</Text>
+          <Text style={styles.pickedUpOrderAmountNew}>₹{order.amount?.toFixed(2) || '0.00'}</Text>
         </View>
         
-        {order.isAssignedToRider && (order.riderName || order.riderPhone) && (
-          <View style={styles.riderSection}>
-            <View style={styles.riderAvatar}>
-              {order.riderImage ? (
-                <Image
-                  source={{ uri: order.riderImage }}
-                  style={styles.riderAvatarImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <Text style={styles.riderAvatarText}>
-                  {(order.riderName || 'R').charAt(0).toUpperCase()}
+        {/* Dashed Line */}
+        <View style={styles.dashedLine} />
+        
+        {/* Rider Details Section */}
+        {(order.riderName || order.riderPhone) && (
+          <>
+            <Text style={styles.riderDetailsHeading}>Rider Details</Text>
+            <View style={styles.riderDetailsSection}>
+              <View style={styles.riderAvatar}>
+                {order.riderImage ? (
+                  <Image
+                    source={{ uri: order.riderImage }}
+                    style={styles.riderAvatarImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <Text style={styles.riderAvatarText}>
+                    {(order.riderName || 'R').charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.riderDetailsInfo}>
+                <Text style={styles.riderDetailsName}>
+                  Name: {order.riderName || ''}
                 </Text>
-              )}
+                <Text style={styles.riderDetailsPhone}>
+                  Phone No: {order.riderPhone || ''}
+                </Text>
+              </View>
             </View>
-            <View style={styles.riderInfo}>
-              <Text style={styles.riderName}>{order.riderName || 'Rider'}</Text>
-              <Text style={styles.riderPhone}>{order.riderPhone || ''}</Text>
-            </View>
-          </View>
+            
+            {/* Dashed Line */}
+            <View style={styles.dashedLine} />
+          </>
         )}
         
-        <View style={styles.pickedUpActions}>
-          {!isDelivered ? (
-            <>
-              <TouchableOpacity
-                style={styles.arrivingButton}
-                onPress={() => {
-                  if (!isDummy) {
-                    // TODO: Show arrival info
-                    showToast('DE Arriving info', 'info');
-                  }
-                }}
-                activeOpacity={isDummy ? 1 : 0.7}
-                disabled={isDummy}
-              >
-                <Text style={styles.arrivingButtonText}>
-                  DE Arriving in {formatArrivalTime(order)} min
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.trackDeliveryButton}
-                onPress={() => {
-                  if (!isDummy) {
-                    // TODO: Track delivery
-                    showToast('Track delivery', 'info');
-                  }
-                }}
-                activeOpacity={isDummy ? 1 : 0.7}
-                disabled={isDummy}
-              >
-                <Text style={styles.trackDeliveryButtonText}>Track Delivery</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={styles.viewInvoiceButton}
-                onPress={() => {
-                  if (!isDummy) {
-                    // TODO: View invoice
-                    showToast('View invoice', 'info');
-                  }
-                }}
-                activeOpacity={isDummy ? 1 : 0.7}
-                disabled={isDummy}
-              >
-                <Text style={styles.viewInvoiceButtonText}>View Invoice</Text>
-              </TouchableOpacity>
-              {(deliveryTime || deliveryDistance || deliveryRating) && (
-                <View style={[styles.deliveryStats, { marginLeft: 12 }]}>
-                  {deliveryTime && (
-                    <View style={styles.deliveryStatItem}>
-                      <Text style={styles.deliveryStatIcon}>⏱</Text>
-                      <Text style={styles.deliveryStatText}>{deliveryTime}</Text>
-                    </View>
-                  )}
-                  {deliveryDistance && (
-                    <View style={[styles.deliveryStatItem, { marginLeft: 16 }]}>
-                      <Text style={styles.deliveryStatIcon}>📍</Text>
-                      <Text style={styles.deliveryStatText}>{deliveryDistance}</Text>
-                    </View>
-                  )}
-                  {deliveryRating && (
-                    <View style={[styles.deliveryStatItem, { marginLeft: 16 }]}>
-                      <Text style={styles.deliveryStatIcon}>⭐</Text>
-                      <Text style={styles.deliveryStatText}>{deliveryRating}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </>
-          )}
+        {/* Bottom Actions: DE Arriving + Track Delivery */}
+        <View style={styles.pickedUpActionsNew}>
+          <TouchableOpacity
+            style={[styles.deArrivingButton, isMarkingDelivered && styles.deArrivingButtonDisabled]}
+            onPress={() => handleMarkOrderDelivered(order)}
+            activeOpacity={0.7}
+            disabled={isMarkingDelivered}
+          >
+            {isMarkingDelivered ? (
+              <ActivityIndicator size="small" color="#666666" />
+            ) : (
+              <Text style={styles.deArrivingButtonText} numberOfLines={1}>
+                DE Arriving in {formatArrivalTime(order)} min
+              </Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.trackDeliveryButtonFilled}
+            onPress={() => {
+              // TODO: Track delivery
+              showToast('Track delivery', 'info');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.trackDeliveryButtonTextFilled} numberOfLines={1}>Track Delivery</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -2039,31 +2364,12 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
               console.log(`🔍 [OrdersScreen] Total orders to display: ${orders.length}`);
               console.log(`🔍 [OrdersScreen] ========================================`);
               
-              // For PREPARING tab, show dummy card if no orders (for styling purposes)
-              if (orders.length === 0 && activeTab === 'preparing') {
-                const dummyOrder = getDummyPreparingOrder();
-                return (
-                  <View style={styles.ordersListContainer}>
-                    {renderPreparingCard(dummyOrder)}
-                  </View>
-                );
-              }
-              
-              // For PICKED_UP tab, show dummy card if no orders (for styling purposes)
-              if (orders.length === 0 && activeTab === 'pickedUp') {
-                const dummyOrder = getDummyPickedUpOrder();
-                return (
-                  <View style={styles.ordersListContainer}>
-                    {renderPickedUpCard(dummyOrder)}
-                  </View>
-                );
-              }
-              
+              // Show empty state if no orders
               if (orders.length === 0) {
                 return (
                   <View style={styles.emptyStateContainer}>
                     <Image
-                      source={icons.pan}
+                      source={icons.cooking}
                       style={styles.panImage}
                       resizeMode="contain"
                     />
@@ -2382,6 +2688,126 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
           </View>
         </Modal>
       )}
+
+      {/* Invoice Modal with WebView */}
+      <Modal
+        visible={showInvoiceModal}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowInvoiceModal(false);
+          setInvoicePdfUrl(null);
+        }}
+      >
+        <SafeAreaView style={styles.invoiceModalContainer} edges={['top', 'left', 'right']}>
+          <View style={styles.invoiceModalHeader}>
+            <Text style={styles.invoiceModalTitle}>Invoice</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setShowInvoiceModal(false);
+                setInvoicePdfUrl(null);
+              }}
+              style={styles.invoiceModalCloseButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.invoiceModalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {isLoadingInvoice ? (
+            <View style={styles.invoiceLoadingContainer}>
+              <ActivityIndicator size="large" color="#FF6E1A" />
+              <Text style={styles.invoiceLoadingText}>Generating invoice...</Text>
+            </View>
+          ) : invoicePdfUrl ? (
+            <WebView
+              source={useDirectPdf ? { html: invoicePdfUrl } : { uri: invoicePdfUrl }}
+              style={styles.invoiceWebView}
+              startInLoadingState={true}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              allowsInlineMediaPlayback={true}
+              mediaPlaybackRequiresUserAction={false}
+              originWhitelist={['*']}
+              mixedContentMode="always"
+              renderLoading={() => (
+                <View style={styles.invoiceLoadingContainer}>
+                  <ActivityIndicator size="large" color="#FF6E1A" />
+                  <Text style={styles.invoiceLoadingText}>Loading PDF...</Text>
+                </View>
+              )}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('❌ [OrdersScreen] WebView error:', nativeEvent);
+                // If Google Docs Viewer fails, try direct PDF with HTML wrapper
+                if (!useDirectPdf && invoicePdfUrl.includes('docs.google.com')) {
+                  console.log('⚠️ [OrdersScreen] Google Docs Viewer failed, trying direct PDF with HTML wrapper...');
+                  const pdfUrl = invoicePdfUrl.split('url=')[1]?.split('&')[0];
+                  if (pdfUrl) {
+                    const decodedUrl = decodeURIComponent(pdfUrl);
+                    const htmlFallback = `
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                          <style>
+                            * { margin: 0; padding: 0; box-sizing: border-box; }
+                            body, html { width: 100%; height: 100%; overflow: hidden; background: #525252; }
+                            iframe { width: 100%; height: 100%; border: none; }
+                          </style>
+                        </head>
+                        <body>
+                          <iframe src="${decodedUrl}" type="application/pdf" width="100%" height="100%"></iframe>
+                        </body>
+                      </html>
+                    `;
+                    setInvoicePdfUrl(htmlFallback);
+                    setUseDirectPdf(true);
+                    return;
+                  }
+                }
+                showToast('Error loading invoice PDF', 'error');
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.error('❌ [OrdersScreen] WebView HTTP error:', nativeEvent);
+                // Try fallback if Google Docs Viewer fails
+                if (!useDirectPdf && invoicePdfUrl.includes('docs.google.com')) {
+                  console.log('⚠️ [OrdersScreen] Google Docs Viewer HTTP error, trying direct PDF...');
+                  const pdfUrl = invoicePdfUrl.split('url=')[1]?.split('&')[0];
+                  if (pdfUrl) {
+                    const decodedUrl = decodeURIComponent(pdfUrl);
+                    const htmlFallback = `
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                          <style>
+                            * { margin: 0; padding: 0; box-sizing: border-box; }
+                            body, html { width: 100%; height: 100%; overflow: hidden; background: #525252; }
+                            iframe { width: 100%; height: 100%; border: none; }
+                          </style>
+                        </head>
+                        <body>
+                          <iframe src="${decodedUrl}" type="application/pdf" width="100%" height="100%"></iframe>
+                        </body>
+                      </html>
+                    `;
+                    setInvoicePdfUrl(htmlFallback);
+                    setUseDirectPdf(true);
+                    return;
+                  }
+                }
+                showToast('Error loading invoice PDF', 'error');
+              }}
+            />
+          ) : (
+            <View style={styles.invoiceErrorContainer}>
+              <Text style={styles.invoiceErrorText}>Unable to load invoice</Text>
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2675,11 +3101,13 @@ const styles = StyleSheet.create({
   emptyStateContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    flex: 1,
   },
   panImage: {
-    width: 200,
-    height: 200,
-    // marginBottom: 10,
+    width: 120,
+    height: 120,
+    alignSelf: 'center',
+    marginBottom: 10,
   },
   noOrdersText: {
     fontFamily: Poppins.semiBold,
@@ -2699,8 +3127,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   newOrderBannerIcon: {
-    width: 56,
-    height: 56,
+    width: 40,
+    height: 40,
     marginRight: 12,
   },
   newOrderBannerText: {
@@ -2858,25 +3286,131 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#FF6E1A',
   },
-  addButtonDisabled: {
-    opacity: 0.5,
-    borderColor: '#CCCCCC',
+  // PREPARING Card Styles (New Design - matching other cards)
+  preparingCardNew: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E3F2FD',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  dummyBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    zIndex: 10,
+  preparingCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  dummyBadgeText: {
+  preparingCardDate: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+  },
+  preparingCardStatus: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 16,
+    color: '#8B4513',
+    flex: 1,
+    textAlign: 'center',
+  },
+  preparingCardTime: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+    textAlign: 'right',
+  },
+  preparingOrderNumberNew: {
     fontFamily: Poppins.bold,
-    fontSize: 10,
-    color: '#FF6E1A',
-    textTransform: 'uppercase',
+    fontSize: 24,
+    color: '#000000',
+    marginBottom: 8,
+  },
+  preparingOrderInfoNew: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  preparingOrderDetailsNew: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+  },
+  preparingItemsPreview: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 12,
+  },
+  deAssignmentSectionNew: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  deAssignmentTextNew: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#000000',
+    flex: 1,
+  },
+  deIconNew: {
+    width: 48,
+    height: 48,
+    marginLeft: 12,
+  },
+  preparingActionsNew: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    marginTop: 8,
+    gap: 12,
+  },
+  markReadyButtonNew: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#8B4513',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 48,
+  },
+  markReadyButtonDisabledNew: {
+    opacity: 0.6,
+  },
+  markReadyButtonTextNew: {
+    fontFamily: Poppins.medium,
+    fontSize: 14,
+    color: '#8B4513',
+    textAlign: 'center',
+  },
+  addTimeButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#8B4513',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addTimeButtonText: {
+    fontFamily: Poppins.bold,
+    fontSize: 24,
+    color: '#8B4513',
   },
   // READY Card Styles
   readyCard: {
@@ -3004,6 +3538,117 @@ const styles = StyleSheet.create({
     fontFamily: Poppins.regular,
     fontSize: 14,
     color: '#000000',
+  },
+  // READY Card Styles (New Design - matching picked up and delivered cards)
+  readyCardNew: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E3F2FD',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  readyCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  readyCardDate: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+  },
+  readyCardStatus: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 16,
+    color: '#4CAF50',
+    flex: 1,
+    textAlign: 'center',
+  },
+  readyCardTime: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+    textAlign: 'right',
+  },
+  readyOrderNumberNew: {
+    fontFamily: Poppins.bold,
+    fontSize: 24,
+    color: '#000000',
+    marginBottom: 8,
+  },
+  readyOrderInfoNew: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  readyOrderDetailsNew: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+    marginRight: 12,
+  },
+  readyOrderAmountNew: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+  },
+  readyActionsNew: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    marginTop: 8,
+    gap: 12,
+  },
+  foodReadyButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#666666',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 48,
+  },
+  foodReadyButtonDisabled: {
+    opacity: 0.6,
+  },
+  foodReadyButtonText: {
+    fontFamily: Poppins.medium,
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+  },
+  trackDeliveryButtonReady: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#D4A574',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 48,
+  },
+  trackDeliveryButtonTextReady: {
+    fontFamily: Poppins.medium,
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   // PICKED_UP Card Styles
   pickedUpCard: {
@@ -3151,6 +3796,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  arrivingButtonDisabled: {
+    opacity: 0.6,
+  },
   arrivingButtonText: {
     fontFamily: Poppins.regular,
     fontSize: 14,
@@ -3164,6 +3812,117 @@ const styles = StyleSheet.create({
     fontFamily: Poppins.regular,
     fontSize: 14,
     color: '#000000',
+  },
+  // PICKED_UP Card Styles (New Design - matching delivered card)
+  pickedUpCardNew: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E3F2FD',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pickedUpCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pickedUpCardDate: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+  },
+  pickedUpCardStatus: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 16,
+    color: '#4CAF50',
+    flex: 1,
+    textAlign: 'center',
+  },
+  pickedUpCardTime: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+    textAlign: 'right',
+  },
+  pickedUpOrderNumberNew: {
+    fontFamily: Poppins.bold,
+    fontSize: 24,
+    color: '#000000',
+    marginBottom: 8,
+  },
+  pickedUpOrderInfoNew: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pickedUpOrderDetailsNew: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+    marginRight: 12,
+  },
+  pickedUpOrderAmountNew: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+  },
+  pickedUpActionsNew: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    marginTop: 8,
+    gap: 12,
+  },
+  deArrivingButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#666666',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 48,
+  },
+  deArrivingButtonDisabled: {
+    opacity: 0.6,
+  },
+  deArrivingButtonText: {
+    fontFamily: Poppins.medium,
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+  },
+  trackDeliveryButtonFilled: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#D4A574',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    height: 48,
+  },
+  trackDeliveryButtonTextFilled: {
+    fontFamily: Poppins.medium,
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   viewInvoiceButton: {
     flexDirection: 'row',
@@ -3181,12 +3940,152 @@ const styles = StyleSheet.create({
   },
   deliveryStatItem: {
     alignItems: 'center',
+    marginLeft: 16,
   },
   deliveryStatIcon: {
-    fontSize: 20,
+    width: 24,
+    height: 24,
     marginBottom: 4,
+    tintColor: '#FF6E1A',
   },
   deliveryStatText: {
+    fontFamily: Poppins.regular,
+    fontSize: 12,
+    color: '#666666',
+  },
+  // DELIVERED Card Styles (New Design)
+  deliveredCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E3F2FD',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  deliveredCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  deliveredCardDate: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+  },
+  deliveredCardStatus: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 16,
+    color: '#4CAF50',
+    flex: 1,
+    textAlign: 'center',
+  },
+  deliveredCardTime: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+    textAlign: 'right',
+  },
+  deliveredOrderNumber: {
+    fontFamily: Poppins.bold,
+    fontSize: 24,
+    color: '#000000',
+    marginBottom: 8,
+  },
+  deliveredOrderInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  deliveredOrderDetails: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    flex: 1,
+    marginRight: 12,
+  },
+  deliveredOrderAmount: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+  },
+  riderDetailsHeading: {
+    fontFamily: Poppins.bold,
+    fontSize: 14,
+    color: '#000000',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  riderDetailsSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  riderDetailsInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  riderDetailsName: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 4,
+  },
+  riderDetailsPhone: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+  },
+  deliveredActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  viewInvoiceButtonOutlined: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D4A574',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  viewInvoiceButtonTextOutlined: {
+    fontFamily: Poppins.medium,
+    fontSize: 14,
+    color: '#D4A574',
+  },
+  deliveryStatsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  deliveredDeliveryStatItem: {
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  deliveredDeliveryStatIcon: {
+    width: 24,
+    height: 24,
+    marginBottom: 4,
+    // tintColor: '#FF6E1A',
+  },
+  deliveredDeliveryStatText: {
     fontFamily: Poppins.regular,
     fontSize: 12,
     color: '#666666',
@@ -3394,6 +4293,62 @@ const styles = StyleSheet.create({
     fontFamily: Poppins.semiBold,
     fontSize: 16,
     color: '#FF6E1A',
+  },
+  // Invoice Modal Styles
+  invoiceModalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  invoiceModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
+  },
+  invoiceModalTitle: {
+    fontFamily: Poppins.bold,
+    fontSize: 20,
+    color: '#000000',
+  },
+  invoiceModalCloseButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  invoiceModalCloseText: {
+    fontFamily: Poppins.semiBold,
+    fontSize: 16,
+    color: '#FF6E1A',
+  },
+  invoiceWebView: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  invoiceLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  invoiceLoadingText: {
+    fontFamily: Poppins.regular,
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 12,
+  },
+  invoiceErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  invoiceErrorText: {
+    fontFamily: Poppins.regular,
+    fontSize: 16,
+    color: '#666666',
   },
 });
 

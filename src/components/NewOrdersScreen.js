@@ -143,33 +143,18 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
   };
 
   const handleAccept = (order) => {
-    Alert.alert(
-      'Accept Order',
-      `Do you want to accept order #${order.id}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Accept',
-          onPress: () => {
-            if (onAcceptOrder) {
-              onAcceptOrder(order);
-            }
-            setLocalOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
-            showToast('Order accepted successfully', 'success');
-            
-            // Close screen if no more orders
-            if (localOrders.length === 1) {
-              setTimeout(() => {
-                onClose();
-              }, 500);
-            }
-          },
-        },
-      ]
-    );
+    if (onAcceptOrder) {
+      onAcceptOrder(order);
+    }
+    setLocalOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
+    showToast('Order accepted successfully', 'success');
+    
+    // Close screen if no more orders
+    if (localOrders.length === 1) {
+      setTimeout(() => {
+        onClose();
+      }, 500);
+    }
   };
 
   const handleDeny = (order) => {

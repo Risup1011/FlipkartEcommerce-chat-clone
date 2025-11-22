@@ -126,14 +126,11 @@ const AddOnsScreen = ({ onCreateAddon, onRefresh }) => {
               activeOpacity={0.7}
             >
               <View style={styles.addonItemLeft}>
-                <View
-                  style={[
-                    styles.vegIndicator,
-                    addon.isVeg ? styles.vegIndicatorGreen : styles.vegIndicatorOrange,
-                  ]}
-                >
-                  <View style={styles.vegDot} />
-                </View>
+                <Image
+                  source={addon.isVeg ? icons.veg : icons.nonVeg}
+                  style={styles.vegIcon}
+                  resizeMode="contain"
+                />
                 <Text style={styles.addonName}>{addon.name}</Text>
               </View>
               <Text style={styles.addonPrice}>₹{addon.price}</Text>
@@ -205,6 +202,11 @@ const styles = StyleSheet.create({
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  vegIcon: {
+    width: 16,
+    height: 16,
+    marginRight: 12,
   },
   vegIndicatorGreen: {
     backgroundColor: '#4CAF50',

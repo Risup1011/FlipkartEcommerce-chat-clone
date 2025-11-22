@@ -8,8 +8,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Image,
 } from 'react-native';
-import { Poppins } from '../assets';
+import { Poppins, icons } from '../assets';
 import CustomHeader from './CustomHeader';
 import CustomDropdown from './CustomDropdown';
 import AddOnsSelectionScreen from './AddOnsSelectionScreen';
@@ -74,6 +75,7 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
         return {
           ...linkedAddon,
           additional_price: linkedAddon.additional_price || addonDetails?.additional_price || 0,
+          item_type: linkedAddon.item_type || addonDetails?.item_type || 'VEG',
         };
       });
       setLinkedAddons(enrichedLinkedAddons);
@@ -450,9 +452,11 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
                 return (
                 <View key={addonId} style={styles.linkedAddonItem}>
                   <View style={styles.linkedAddonLeft}>
-                    <View style={styles.vegIndicatorGreen}>
-                      <View style={styles.vegDot} />
-                    </View>
+                    <Image
+                      source={linkedAddon.item_type === 'VEG' ? icons.veg : icons.nonVeg}
+                      style={styles.vegIcon}
+                      resizeMode="contain"
+                    />
                     <View style={styles.linkedAddonInfo}>
                       <Text style={styles.linkedAddonName}>{linkedAddon.add_on_name || 'Unknown'}</Text>
                       <TouchableOpacity
@@ -690,6 +694,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  vegIcon: {
+    width: 16,
+    height: 16,
+    marginRight: 12,
   },
   vegDot: {
     width: 8,

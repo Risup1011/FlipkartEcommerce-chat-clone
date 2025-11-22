@@ -985,13 +985,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
                               <View style={styles.itemDetails}>
                                 <View style={styles.itemHeader}>
                                   <View style={styles.itemNameContainer}>
-                                    <View
-                                      style={[
-                                        styles.vegIndicator,
-                                        item.isVeg
-                                          ? styles.vegIndicatorGreen
-                                          : styles.vegIndicatorOrange,
-                                      ]}
+                                    <Image
+                                      source={item.isVeg ? icons.veg : icons.nonVeg}
+                                      style={styles.vegIcon}
+                                      resizeMode="contain"
                                     />
                                     <Text style={styles.itemName} numberOfLines={1}>
                                       {item.name}
@@ -1070,13 +1067,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
                 <View style={styles.itemDetails}>
                   <View style={styles.itemHeader}>
                     <View style={styles.itemNameContainer}>
-                      <View
-                        style={[
-                          styles.vegIndicator,
-                          item.isVeg
-                            ? styles.vegIndicatorGreen
-                            : styles.vegIndicatorOrange,
-                        ]}
+                      <Image
+                        source={item.isVeg ? icons.veg : icons.nonVeg}
+                        style={styles.vegIcon}
+                        resizeMode="contain"
                       />
                       <Text style={styles.itemName} numberOfLines={1}>
                         {item.name}
@@ -1185,13 +1179,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         <View style={styles.itemDetails}>
           <View style={styles.itemHeader}>
             <View style={styles.itemNameContainer}>
-              <View
-                style={[
-                  styles.vegIndicator,
-                  item.item_type === 'VEG'
-                    ? styles.vegIndicatorGreen
-                    : styles.vegIndicatorOrange,
-                ]}
+              <Image
+                source={item.item_type === 'VEG' ? icons.veg : icons.nonVeg}
+                style={styles.vegIcon}
+                resizeMode="contain"
               />
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemName} numberOfLines={1}>
@@ -1372,7 +1363,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         console.log('✅ [MenuScreen] Cache updated successfully with new toggle state');
         console.log('💾 [MenuScreen] ========================================');
         
-        showToast(`Item ${newIsActive ? 'activated' : 'deactivated'} successfully`, 'success');
+        // Toggle happens silently in the background - no toast notification
       } else {
         console.error('❌ [MenuScreen] API returned error, reverting optimistic update');
         // Revert optimistic update on error
@@ -2268,6 +2259,18 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
     }
   };
 
+  // Memoize the onBack callback for ItemImageTimingScreen to prevent unnecessary re-renders
+  const handleItemImageTimingBack = useCallback(async () => {
+  // console.log('🔙 [MenuScreen] ItemImageTimingScreen onBack called');
+    setShowItemImageTiming(false);
+    setSelectedCategoryId(null);
+    setSelectedItemId(null);
+    setSelectedItemName(null);
+    // Refresh categories to update images after deletion
+    await refreshCategories();
+  // console.log('✅ [MenuScreen] ItemImageTimingScreen closed and categories refreshed');
+  }, [refreshCategories]);
+
   // Show ItemImageTimingScreen when adding/editing item images
   if (showItemImageTiming) {
   // console.log('📷 [MenuScreen] Rendering ItemImageTimingScreen');
@@ -2275,14 +2278,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       <ItemImageTimingScreen
         itemId={selectedItemId}
         itemName={selectedItemName}
-        onBack={() => {
-  // console.log('🔙 [MenuScreen] ItemImageTimingScreen onBack called');
-          setShowItemImageTiming(false);
-          setSelectedCategoryId(null);
-          setSelectedItemId(null);
-          setSelectedItemName(null);
-  // console.log('✅ [MenuScreen] ItemImageTimingScreen closed');
-        }}
+        onBack={handleItemImageTimingBack}
         onSave={handleSaveItemImageTiming}
       />
     );
@@ -2778,7 +2774,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
             <View style={styles.categoriesListContainer}>
 
               {/* Show initial loading with proper loader */}
-              {isInitialLoading ? (
+              {(isInitialLoading || (isLoading && categories.length === 0)) ? (
                 <View style={styles.initialLoadingContainer}>
                   <ActivityIndicator size="large" color="#D4A574" />
                   <Text style={styles.loadingText}>Loading menu...</Text>
@@ -2825,11 +2821,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
                     <Text style={styles.noItemsText}>Try searching with different keywords</Text>
                   </View>
                 )
-              ) : isLoading ? (
-                <View style={styles.emptyStateContainer}>
-                  <ActivityIndicator size="large" color="#D4A574" />
-                  <Text style={styles.loadingText}>Loading...</Text>
-                </View>
               ) : categories.length === 0 ? (
                 <View style={styles.emptyStateContainer}>
                   <Image
@@ -3272,6 +3263,12 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 2,
+    marginRight: 8,
+    flexShrink: 0,
+  },
+  vegIcon: {
+    width: 16,
+    height: 16,
     marginRight: 8,
     flexShrink: 0,
   },

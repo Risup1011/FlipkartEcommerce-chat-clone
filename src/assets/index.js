@@ -36,4 +36,9 @@ export const icons = {
   rice: require('./icon/rice.png'),
   addOns: require('./icon/AddOns.png'),
   extra: require('./icon/Extra.png'),
+  veg: require('./icon/Veg.png'),
+  nonVeg: require('./icon/Non-Veg.png'),
+  star: require('./icon/star.png'),
+  time: require('./icon/Time.png'),
+  de: require('./icon/DE.png'),
 };
