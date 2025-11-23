@@ -18,8 +18,7 @@ import { API_BASE_URL } from '../config';
 import { useToast } from './ToastContext';
 
 const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variantType = 'QUANTITY', variantTitle = 'Quantity', itemData = null, configData = null }) => {
-  const { showToast } = useToast();
-  const [variantOptions, setVariantOptions] = useState([
+    const [variantOptions, setVariantOptions] = useState([
     {
       id: Date.now(),
       name: '',
@@ -196,7 +195,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     // Ensure at least one option remains
     if (filtered.length === 0) {
       const errorMsg = getUILabel('variant_at_least_one_option', 'At least one variant option is required');
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -266,13 +264,11 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         const errorMessage = data.message || data.error || 'Failed to update variant';
         console.error('❌ [AddQuantityScreen] Failed to update variant:', errorMessage);
         const errorMsg = getUILabel('variant_remove_option_error', 'Failed to remove option. Please try again.');
-        showToast(errorMsg, 'error');
         return false; // Failure
       }
     } catch (error) {
       console.error('❌ [AddQuantityScreen] Error updating variant:', error);
       const errorMsg = getUILabel('variant_remove_option_error', 'Failed to remove option. Please try again.');
-      showToast(errorMsg, 'error');
       return false; // Failure
     }
   };
@@ -291,7 +287,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     const hasEmptyNames = variantOptions.some((opt) => !opt.name.trim());
     if (hasEmptyNames) {
       const errorMsg = getUILabel('variant_option_name_required', 'Please enter a name for all variant options');
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -309,14 +304,12 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     });
     if (hasInvalidPrices) {
       const errorMsg = getUILabel('variant_price_required', 'Please enter valid prices (numbers >= 0) for all variant options');
-      showToast(errorMsg, 'error');
       return;
     }
 
     // Check if itemData and itemId are available
     if (!itemData || !itemData.id) {
       const errorMsg = getUILabel('item_data_missing', 'Item data is missing. Please save the item first.');
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -324,7 +317,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     const titleToUse = variantType === 'CUSTOM' ? editableVariantTitle : variantTitle;
     if (!titleToUse || titleToUse.trim() === '') {
       const errorMsg = getUILabel('variant_title_required', 'Variant title is required');
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -370,7 +362,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       // Ensure we have at least one valid option
       if (validOptions.length === 0) {
         const errorMsg = getUILabel('variant_at_least_one_option', 'At least one valid variant option is required');
-        showToast(errorMsg, 'error');
         setIsSaving(false);
         return;
       }
@@ -403,7 +394,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
         const successMsg = isUpdating 
           ? getUILabel('variant_updated_success', 'Variant updated successfully')
           : getUILabel('variant_created_success', 'Variant created successfully');
-        showToast(successMsg, 'success');
         
         // Call onSave callback with variant data if provided
         if (onSave) {
@@ -438,12 +428,10 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
           displayMessage = JSON.stringify(data.error);
         }
         
-        showToast(displayMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [AddQuantityScreen] Error creating variant:', error);
       const errorMsg = getUILabel('variant_create_error', 'Failed to create variant. Please try again.');
-      showToast(errorMsg, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -453,13 +441,11 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
     // Only allow deletion if we're editing an existing variant
     if (!existingVariantId) {
       const errorMsg = getUILabel('variant_no_delete_new', 'No variant to delete. This is a new variant.');
-      showToast(errorMsg, 'error');
       return;
     }
 
     if (!itemData || !itemData.id) {
       const errorMsg = getUILabel('item_data_missing', 'Item data is missing');
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -500,7 +486,6 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
         const successMsg = getUILabel('variant_deleted_success', 'Variant deleted successfully');
-        showToast(successMsg, 'success');
         // Call onDelete callback to refresh categories before navigating back
         if (onDeleteCallback) {
           await onDeleteCallback();
@@ -509,12 +494,10 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
       } else {
         const errorMessage = data.message || data.error || 'Failed to delete variant';
         console.error('❌ [AddQuantityScreen] Failed to delete variant:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [AddQuantityScreen] Error deleting variant:', error);
       const errorMsg = getUILabel('variant_delete_error', 'Failed to delete variant. Please try again.');
-      showToast(errorMsg, 'error');
     } finally {
       setIsDeleting(false);
     }

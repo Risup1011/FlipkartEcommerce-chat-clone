@@ -17,8 +17,7 @@ import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
 const HelpCenterScreen = ({ onBack, screenTitle = 'Help Center', route }) => {
-  const { showToast } = useToast();
-  const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
   const [faqs, setFaqs] = useState([]);
   const [expandedFaqs, setExpandedFaqs] = useState({});
   const [isLoading, setIsLoading] = useState(true);
@@ -103,7 +102,6 @@ const HelpCenterScreen = ({ onBack, screenTitle = 'Help Center', route }) => {
   };
 
   const handleSendMessage = () => {
-    showToast('Send message feature - Coming soon', 'info');
     // TODO: Implement send message functionality
   };
 

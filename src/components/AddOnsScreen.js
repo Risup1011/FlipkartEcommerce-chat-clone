@@ -14,8 +14,7 @@ import { API_BASE_URL } from '../config';
 import { useToast } from './ToastContext';
 
 const AddOnsScreen = ({ onCreateAddon, onRefresh }) => {
-  const { showToast } = useToast();
-  const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
   const [addons, setAddons] = useState([]);
   const [isLoadingAddons, setIsLoadingAddons] = useState(false);
 
@@ -62,15 +61,13 @@ const AddOnsScreen = ({ onCreateAddon, onRefresh }) => {
       } else {
         const errorMessage = data.message || data.error || 'Failed to fetch add-ons';
         console.error('❌ [AddOnsScreen] Failed to fetch add-ons:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [AddOnsScreen] Error fetching add-ons:', error);
-      showToast('Failed to fetch add-ons', 'error');
     } finally {
       setIsLoadingAddons(false);
     }
-  }, [showToast]);
+  }, []);
 
   // Fetch add-ons on mount and when onRefresh trigger changes
   useEffect(() => {

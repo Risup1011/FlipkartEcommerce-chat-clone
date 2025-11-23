@@ -22,8 +22,7 @@ const AddOnsSelectionScreen = ({
   itemData = null,
   customizationData = null, // Contains selection_type, min_selection, max_selection
 }) => {
-  const { showToast } = useToast();
-  const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
   const [addons, setAddons] = useState([]);
   const [selectedAddons, setSelectedAddons] = useState(new Set());
   const [isLoadingAddons, setIsLoadingAddons] = useState(false);
@@ -54,15 +53,13 @@ const AddOnsSelectionScreen = ({
       } else {
         const errorMessage = data.message || data.error || 'Failed to fetch add-ons';
         console.error('❌ [AddOnsSelectionScreen] Failed to fetch add-ons:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [AddOnsSelectionScreen] Error fetching add-ons:', error);
-      showToast('Failed to fetch add-ons', 'error');
     } finally {
       setIsLoadingAddons(false);
     }
-  }, [showToast]);
+  }, []);
 
   // Fetch add-ons on mount
   useEffect(() => {
@@ -100,17 +97,14 @@ const AddOnsSelectionScreen = ({
   // Link selected add-ons to item
   const handleLinkAddons = async () => {
     if (!itemData || !itemData.id) {
-      showToast('Item data is missing', 'error');
       return;
     }
 
     if (selectedAddons.size === 0) {
-      showToast('Please select at least one add-on', 'error');
       return;
     }
 
     if (!customizationData) {
-      showToast('Customization settings are missing', 'error');
       return;
     }
 
@@ -162,7 +156,6 @@ const AddOnsSelectionScreen = ({
       const data = await response.json();
 
       if (response.ok && data.code === 200 && data.status === 'success') {
-        showToast('Add-ons linked successfully', 'success');
         if (onSave) {
           onSave(data.data); // Pass the updated item data
         }
@@ -175,11 +168,9 @@ const AddOnsSelectionScreen = ({
         console.error('❌ [AddOnsSelectionScreen] Error message:', errorMessage);
         console.error('❌ [AddOnsSelectionScreen] Full response:', JSON.stringify(data, null, 2));
         console.error('❌ [AddOnsSelectionScreen] Request that failed:', JSON.stringify(requestBody, null, 2));
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [AddOnsSelectionScreen] Error linking add-ons:', error);
-      showToast('Failed to link add-ons', 'error');
     } finally {
       setIsLinking(false);
     }

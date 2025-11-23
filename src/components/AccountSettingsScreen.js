@@ -14,8 +14,7 @@ import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
 const AccountSettingsScreen = ({ onBack }) => {
-  const { showToast } = useToast();
-  const [settings, setSettings] = useState(null);
+    const [settings, setSettings] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -37,11 +36,9 @@ const AccountSettingsScreen = ({ onBack }) => {
         setSettings(data.data);
       } else {
         console.error('❌ [AccountSettingsScreen] Failed to fetch settings:', data.message);
-        showToast(data.message || 'Failed to load settings', 'error');
       }
     } catch (error) {
       console.error('❌ [AccountSettingsScreen] Error fetching settings:', error);
-      showToast('Failed to load settings', 'error');
     } finally {
       setIsLoading(false);
     }

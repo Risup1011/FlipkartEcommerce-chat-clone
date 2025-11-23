@@ -23,6 +23,7 @@ import { Poppins, icons, images } from '../assets';
 import NewOrdersScreen from './NewOrdersScreen';
 import MenuScreen from './MenuScreen';
 import MoreScreen from './MoreScreen';
+import FinanceScreen from './FinanceScreen';
 import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL, RIDER_API_BASE_URL, DEFAULT_RIDER_ID } from '../config';
@@ -36,8 +37,7 @@ try {
 }
 
 const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceived, onLogout, initialTab, initialBottomTab, onNavigate }) => {
-  const { showToast } = useToast();
-  const [isOnline, setIsOnline] = useState(true);
+    const [isOnline, setIsOnline] = useState(true);
   const [activeTab, setActiveTab] = useState(initialTab || 'preparing');
   const [activeBottomTab, setActiveBottomTab] = useState(initialBottomTab || 'orders');
   const [orderCount, setOrderCount] = useState(0);
@@ -199,20 +199,56 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
   // Calculate remaining time for countdown (MM:SS)
   const calculateRemainingTime = (estimatedReadyTime) => {
-    if (!estimatedReadyTime) return null;
+    if (estimatedReadyTime === null || estimatedReadyTime === undefined) return null;
     try {
-      const target = new Date(estimatedReadyTime);
-      const now = new Date();
-      const diffMs = target - now;
-      
-      if (diffMs <= 0) return '00:00';
-      
-      const totalSeconds = Math.floor(diffMs / 1000);
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      
-      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      // Handle numeric values (could be minutes remaining, epoch seconds, or epoch ms)
+      if (typeof estimatedReadyTime === 'number') {
+        // If small number, treat as minutes remaining (e.g., 15)
+        if (estimatedReadyTime > 0 && estimatedReadyTime <= 10000) {
+          const totalSeconds = Math.floor(estimatedReadyTime * 60);
+          const minutes = Math.floor(totalSeconds / 60);
+          const seconds = totalSeconds % 60;
+          return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Otherwise treat as epoch (seconds or milliseconds)
+        const asMs = estimatedReadyTime > 1e12 ? estimatedReadyTime : estimatedReadyTime > 1e10 ? estimatedReadyTime : estimatedReadyTime * 1000;
+        const target = new Date(asMs);
+        if (isNaN(target.getTime())) return null;
+        const now = new Date();
+        const diffMs = target - now;
+        if (diffMs <= 0) return '00:00';
+        const totalSeconds = Math.floor(diffMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      // Handle string values
+      if (typeof estimatedReadyTime === 'string') {
+        const trimmed = estimatedReadyTime.trim();
+        // If numeric string, convert to number and reuse logic
+        if (/^-?\d+$/.test(trimmed)) {
+          const num = Number(trimmed);
+          return calculateRemainingTime(num);
+        }
+
+        // Otherwise try ISO/date parse
+        const target = new Date(trimmed);
+        if (isNaN(target.getTime())) return null;
+        const now = new Date();
+        const diffMs = target - now;
+        if (diffMs <= 0) return '00:00';
+        const totalSeconds = Math.floor(diffMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+
+      // Unknown format
+      return null;
     } catch (e) {
+      console.warn('calculateRemainingTime parse error:', e);
       return null;
     }
   };
@@ -249,7 +285,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     return {
       // Always use the MongoDB ObjectId (id), never fallback to order_number for API calls
       id: apiOrder.id,
-      orderNumber: apiOrder.order_number,
+      orderNumber: apiOrder.order_number ? String(apiOrder.order_number).replace(/^#/, '') : apiOrder.order_number,
       partnerId: apiOrder.partner_id,
       customerName: apiOrder.customer_name || 'Customer',
       customerPhone: apiOrder.customer_phone,
@@ -856,7 +892,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       setOrderCount(prev => Math.max(0, prev - 1));
       setLastNewOrdersCount(prev => Math.max(0, prev - 1));
       
-      showToast(`Order ${order.orderNumber || order.id} accepted`, 'success');
       
       // Refresh orders after accepting
       setTimeout(() => {
@@ -883,7 +918,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       setOrderCount(prev => Math.max(0, prev - 1));
       setLastNewOrdersCount(prev => Math.max(0, prev - 1));
       
-      showToast(`Order ${order.orderNumber || order.id} denied`, 'info');
       
       // Refresh orders after denying
       setTimeout(() => {
@@ -892,7 +926,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       }, 1000);
     } catch (error) {
       console.error('❌ Error denying order:', error);
-      showToast('Failed to deny order', 'error');
     }
   };
 
@@ -913,19 +946,10 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       
       
       if (response.ok) {
-        showToast(
-          `Catalog API Success! Check console for details. Items: ${responseData?.data?.length || 0}`,
-          'success'
-        );
       } else {
-        showToast(
-          `Catalog API Error: ${response.status} - ${responseData?.message || 'Unknown error'}`,
-          'error'
-        );
       }
     } catch (error) {
       console.error('❌ Catalog API Error:', error);
-      showToast(`Catalog API Error: ${error.message}`, 'error');
     } finally {
       setIsLoadingCatalog(false);
     }
@@ -946,19 +970,10 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       if (response.ok && responseData?.data) {
         // Update config data if test is successful
         setConfigData(responseData.data);
-        showToast(
-          `Config API Success! Data updated. Check console for details.`,
-          'success'
-        );
       } else {
-        showToast(
-          `Config API Error: ${response.status} - ${responseData?.message || 'Unknown error'}`,
-          'error'
-        );
       }
     } catch (error) {
       console.error('❌ Config API Error:', error);
-      showToast(`Config API Error: ${error.message}`, 'error');
     } finally {
       setIsLoadingConfig(false);
     }
@@ -966,36 +981,173 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
   // Countdown timer component for preparing orders
   const PreparingCountdown = ({ estimatedReadyTime }) => {
-    const [countdown, setCountdown] = useState(() => {
-      if (!estimatedReadyTime) return null;
-      const remaining = calculateRemainingTime(estimatedReadyTime);
-      if (!remaining) return null;
-      const [minutes, seconds] = remaining.split(':');
-      return { minutes: parseInt(minutes, 10), seconds: parseInt(seconds, 10) };
-    });
-    
-    useEffect(() => {
-      if (!estimatedReadyTime) return;
+    const [countdown, setCountdown] = useState(null);
+    const targetMsRef = useRef(null);
+
+    // Convert various estimatedReadyTime formats into an absolute target timestamp (ms since epoch)
+    const computeTargetMs = (val) => {
+      console.log('🕐 [PreparingCountdown] ========================================');
+      console.log('🕐 [PreparingCountdown] COMPUTING TARGET TIME');
+      console.log('🕐 [PreparingCountdown] Input value:', val);
+      console.log('🕐 [PreparingCountdown] Input type:', typeof val);
+      console.log('🕐 [PreparingCountdown] ========================================');
       
-      const interval = setInterval(() => {
-        const remaining = calculateRemainingTime(estimatedReadyTime);
-        if (!remaining || remaining === '00:00') {
+      if (val === null || val === undefined) {
+        console.log('🕐 [PreparingCountdown] Input is null/undefined, returning null');
+        return null;
+      }
+      // Numeric: could be minutes remaining or epoch seconds/ms
+      if (typeof val === 'number') {
+        // Treat small numbers (<= 10000) as minutes remaining
+        if (val > 0 && val <= 10000) {
+          const targetMs = Date.now() + Math.round(val * 60 * 1000);
+          console.log('🕐 [PreparingCountdown] Number <= 10000, treating as minutes remaining:', val);
+          console.log('🕐 [PreparingCountdown] Target timestamp (ms):', targetMs);
+          console.log('🕐 [PreparingCountdown] Target date:', new Date(targetMs).toISOString());
+          return targetMs;
+        }
+        // Otherwise treat as epoch (seconds or ms)
+        if (val > 1e12) {
+          console.log('🕐 [PreparingCountdown] Large number, treating as epoch ms:', val);
+          console.log('🕐 [PreparingCountdown] Target date:', new Date(val).toISOString());
+          return val; // already ms
+        }
+        if (val > 1e10) {
+          console.log('🕐 [PreparingCountdown] Medium-large number, treating as epoch ms:', val);
+          console.log('🕐 [PreparingCountdown] Target date:', new Date(val).toISOString());
+          return val; // probably ms
+        }
+        if (val > 1e9) {
+          const targetMs = val * 1000;
+          console.log('🕐 [PreparingCountdown] Number > 1e9, treating as epoch seconds:', val);
+          console.log('🕐 [PreparingCountdown] Target timestamp (ms):', targetMs);
+          console.log('🕐 [PreparingCountdown] Target date:', new Date(targetMs).toISOString());
+          return targetMs; // seconds -> ms
+        }
+        // fallback: treat as minutes
+        const targetMs = Date.now() + Math.round(val * 60 * 1000);
+        console.log('🕐 [PreparingCountdown] Number fallback, treating as minutes:', val);
+        console.log('🕐 [PreparingCountdown] Target timestamp (ms):', targetMs);
+        console.log('🕐 [PreparingCountdown] Target date:', new Date(targetMs).toISOString());
+        return targetMs;
+      }
+
+      if (typeof val === 'string') {
+        const s = val.trim();
+        console.log('🕐 [PreparingCountdown] String input, trimmed:', s);
+        
+        // Numeric string -> minutes remaining
+        if (/^-?\d+$/.test(s)) {
+          const n = Number(s);
+          console.log('🕐 [PreparingCountdown] Numeric string detected, value:', n);
+          if (n > 0) {
+            const targetMs = Date.now() + Math.round(n * 60 * 1000);
+            console.log('🕐 [PreparingCountdown] Treating as minutes, target ms:', targetMs);
+            console.log('🕐 [PreparingCountdown] Target date:', new Date(targetMs).toISOString());
+            return targetMs;
+          }
+        }
+        
+        // Try ISO/date parse - handle timezone issue
+        // If timestamp has no timezone (no Z or offset), treat as local time
+        // Pattern: YYYY-MM-DDTHH:mm:ss.sss (no Z or +/- at end)
+        const hasTimezone = s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s);
+        
+        if (!hasTimezone && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s)) {
+          // Parse as local time by creating Date object directly
+          console.log('🕐 [PreparingCountdown] Timestamp has no timezone, treating as LOCAL time');
+          try {
+            // Extract date parts and construct Date using local timezone
+            const parts = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
+            if (parts) {
+              const [, year, month, day, hour, minute, second, ms = '0'] = parts;
+              const localDate = new Date(
+                parseInt(year),
+                parseInt(month) - 1, // Month is 0-indexed
+                parseInt(day),
+                parseInt(hour),
+                parseInt(minute),
+                parseInt(second),
+                parseInt(ms.padEnd(3, '0').slice(0, 3)) // Handle ms
+              );
+              const targetMs = localDate.getTime();
+              console.log('🕐 [PreparingCountdown] Parsed as local time, target ms:', targetMs);
+              console.log('🕐 [PreparingCountdown] Target date (local):', localDate.toString());
+              console.log('🕐 [PreparingCountdown] Target date (UTC):', localDate.toISOString());
+              console.log('🕐 [PreparingCountdown] Current time:', new Date().toString());
+              console.log('🕐 [PreparingCountdown] Diff (ms):', targetMs - Date.now());
+              return targetMs;
+            }
+          } catch (e) {
+            console.warn('🕐 [PreparingCountdown] Error parsing as local time:', e);
+          }
+        }
+        
+        // Fallback: standard Date.parse (for timestamps with timezone info)
+        const parsed = Date.parse(s);
+        console.log('🕐 [PreparingCountdown] Date.parse result:', parsed);
+        if (!isNaN(parsed)) {
+          console.log('🕐 [PreparingCountdown] Successfully parsed as ISO date');
+          console.log('🕐 [PreparingCountdown] Target date:', new Date(parsed).toISOString());
+          return parsed;
+        }
+        console.log('🕐 [PreparingCountdown] Failed to parse string, returning null');
+        return null;
+      }
+
+      // Unknown type
+      console.log('🕐 [PreparingCountdown] Unknown type, returning null');
+      return null;
+    };
+
+    useEffect(() => {
+      console.log('🕐 [PreparingCountdown] useEffect triggered, estimatedReadyTime:', estimatedReadyTime);
+      
+      // Compute target once when estimatedReadyTime changes
+      targetMsRef.current = computeTargetMs(estimatedReadyTime);
+      
+      console.log('🕐 [PreparingCountdown] Computed targetMsRef.current:', targetMsRef.current);
+
+      // If no valid target, clear countdown
+      if (!targetMsRef.current) {
+        console.log('🕐 [PreparingCountdown] No valid target, clearing countdown');
+        setCountdown(null);
+        return;
+      }
+
+      // Update immediately and then every second
+      const tick = () => {
+        const now = Date.now();
+        const diffMs = targetMsRef.current - now;
+        
+        if (diffMs <= 0) {
+          console.log('🕐 [PreparingCountdown] Time expired (diffMs <= 0), clearing countdown');
           setCountdown(null);
-          clearInterval(interval);
           return;
         }
-        const [minutes, seconds] = remaining.split(':');
-        setCountdown({ minutes: parseInt(minutes, 10), seconds: parseInt(seconds, 10) });
-      }, 1000);
-      
-      return () => clearInterval(interval);
+        
+        const totalSeconds = Math.floor(diffMs / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        
+        console.log('🕐 [PreparingCountdown] Tick - Remaining:', `${minutes}:${String(seconds).padStart(2, '0')}`, `(${totalSeconds}s)`);
+        setCountdown({ minutes, seconds });
+      };
+
+      console.log('🕐 [PreparingCountdown] Starting countdown timer');
+      tick();
+      const interval = setInterval(tick, 1000);
+      return () => {
+        console.log('🕐 [PreparingCountdown] Cleaning up countdown timer');
+        clearInterval(interval);
+      };
     }, [estimatedReadyTime]);
-    
+
     if (!countdown) return <Text style={styles.markReadyButtonTextNew}>Mark ready</Text>;
-    
+
     return (
       <Text style={styles.markReadyButtonTextNew}>
-        Mark ready in {countdown.minutes}:{countdown.seconds.toString().padStart(2, '0')} min
+        Mark ready in {String(countdown.minutes).padStart(2, '0')}:{String(countdown.seconds).padStart(2, '0')} min
       </Text>
     );
   };
@@ -1003,7 +1155,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   // Mark order as ready API
   const handleMarkOrderReady = async (order) => {
     if (!order || !order.id) {
-      showToast('Order ID not available', 'error');
       return;
     }
 
@@ -1020,7 +1171,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
       if (response.ok && responseData?.code === 200) {
         console.log(`✅ [OrdersScreen] Order marked as ready successfully`);
-        showToast('Order marked as ready', 'success');
         
         // Remove order from PREPARING list immediately
         setOrdersByStatus(prev => ({
@@ -1051,11 +1201,9 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       } else {
         console.error(`❌ [OrdersScreen] Failed to mark order as ready:`, response.status, responseData);
         const errorMessage = responseData?.message || 'Failed to mark order as ready';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error(`❌ [OrdersScreen] Error marking order as ready:`, error);
-      showToast('Error marking order as ready. Please try again.', 'error');
     } finally {
       setIsMarkingReady(false);
     }
@@ -1064,7 +1212,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   // Update preparation time API
   const handleUpdatePreparationTime = async (orderId, minutes) => {
     if (!orderId) {
-      showToast('Order ID not available', 'error');
       return;
     }
 
@@ -1087,7 +1234,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
       if (response.ok && responseData?.code === 200) {
         console.log(`✅ [OrdersScreen] Preparation time updated successfully`);
-        showToast('Preparation time updated successfully', 'success');
         
         // Close modal
         setShowTimePickerModal(false);
@@ -1100,11 +1246,9 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       } else {
         console.error(`❌ [OrdersScreen] Failed to update preparation time:`, response.status, responseData);
         const errorMessage = responseData?.message || 'Failed to update preparation time';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error(`❌ [OrdersScreen] Error updating preparation time:`, error);
-      showToast('Error updating preparation time. Please try again.', 'error');
     } finally {
       setIsUpdatingTime(false);
     }
@@ -1145,7 +1289,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   // Mark order as picked up API
   const handleMarkOrderPickedUp = async (order) => {
     if (!order || !order.id) {
-      showToast('Order ID not available', 'error');
       return;
     }
 
@@ -1189,7 +1332,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         console.log('✅ [OrdersScreen] ========================================');
         console.log('📋 [OrdersScreen] Updated Order Data:', JSON.stringify(responseData.data, null, 2));
         
-        showToast('Order marked as picked up', 'success');
         
         // Remove order from READY list immediately
         setOrdersByStatus(prev => ({
@@ -1227,7 +1369,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         console.error(`❌ [OrdersScreen] Full Response:`, JSON.stringify(responseData, null, 2));
         
         const errorMessage = responseData?.message || 'Failed to mark order as picked up';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [OrdersScreen] ========================================');
@@ -1237,7 +1378,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.error(`❌ [OrdersScreen] Error Message:`, error?.message);
       console.error(`❌ [OrdersScreen] Error Stack:`, error?.stack);
       
-      showToast('Error marking order as picked up. Please try again.', 'error');
     } finally {
       setIsMarkingPickedUp(false);
     }
@@ -1246,7 +1386,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   // Mark order as delivered API
   const handleMarkOrderDelivered = async (order) => {
     if (!order || !order.id) {
-      showToast('Order ID not available', 'error');
       return;
     }
 
@@ -1290,7 +1429,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         console.log('✅ [OrdersScreen] ========================================');
         console.log('📋 [OrdersScreen] Updated Order Data:', JSON.stringify(responseData.data, null, 2));
         
-        showToast('Order marked as delivered', 'success');
         
         // Remove order from PICKED_UP list immediately
         setOrdersByStatus(prev => ({
@@ -1328,7 +1466,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         console.error(`❌ [OrdersScreen] Full Response:`, JSON.stringify(responseData, null, 2));
         
         const errorMessage = responseData?.message || 'Failed to mark order as delivered';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [OrdersScreen] ========================================');
@@ -1338,7 +1475,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.error(`❌ [OrdersScreen] Error Message:`, error?.message);
       console.error(`❌ [OrdersScreen] Error Stack:`, error?.stack);
       
-      showToast('Error marking order as delivered. Please try again.', 'error');
     } finally {
       setIsMarkingDelivered(false);
     }
@@ -1347,7 +1483,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   // Handle viewing invoice
   const handleViewInvoice = async (order) => {
     if (!order) {
-      showToast('Order information not available', 'error');
       return;
     }
 
@@ -1355,7 +1490,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     if (!order.id) {
       console.error('❌ [OrdersScreen] Order ID is missing');
       console.error('❌ [OrdersScreen] Order object:', JSON.stringify(order, null, 2));
-      showToast('Order ID not available', 'error');
       return;
     }
 
@@ -1386,7 +1520,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.error('❌ [OrdersScreen] Order Number:', order.orderNumber);
       console.error('❌ [OrdersScreen] Order Status:', order.status);
       console.error('❌ [OrdersScreen] Full Order Object:', JSON.stringify(order, null, 2));
-      showToast('Invalid order ID. Cannot fetch invoice.', 'error');
       return;
     }
 
@@ -1507,7 +1640,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
           // Invoice was created but PDF URL is missing
           console.error('❌ [OrdersScreen] Invoice created but PDF URL is missing');
           console.error('❌ [OrdersScreen] Response Data:', JSON.stringify(responseData.data, null, 2));
-          showToast('Invoice created but PDF URL not available. Please try again.', 'error');
           setShowInvoiceModal(false);
         }
       } else {
@@ -1535,7 +1667,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
           errorMessage = 'Server error while creating invoice. Please try again.';
         }
         
-        showToast(errorMessage, 'error');
         setShowInvoiceModal(false);
       }
     } catch (error) {
@@ -1549,7 +1680,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.error(`❌ [OrdersScreen] Error Message:`, error?.message);
       console.error(`❌ [OrdersScreen] Error Stack:`, error?.stack);
       
-      showToast('Error fetching invoice. Please try again.', 'error');
       setShowInvoiceModal(false);
     } finally {
       setIsLoadingInvoice(false);
@@ -1694,7 +1824,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             style={styles.trackDeliveryButtonReady}
             onPress={() => {
               // TODO: Track delivery
-              showToast('Track delivery', 'info');
             }}
             activeOpacity={0.7}
           >
@@ -1954,7 +2083,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             style={styles.trackDeliveryButtonFilled}
             onPress={() => {
               // TODO: Track delivery
-              showToast('Track delivery', 'info');
             }}
             activeOpacity={0.7}
           >
@@ -2174,6 +2302,39 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
                 onNavigate(screen);
               }
             }}
+            configData={configData}
+          />
+        </View>
+        {/* Bottom Navigation Bar */}
+        <View style={styles.bottomNav}>
+          {bottomTabs.map((tab) => (
+            <TouchableOpacity
+              key={tab.id}
+              style={styles.bottomNavItem}
+              onPress={() => handleBottomTabPress(tab.id)}
+              activeOpacity={0.7}
+            >
+              <Image
+                source={tab.icon}
+                style={[
+                  styles.bottomNavIcon,
+                  activeBottomTab === tab.id && styles.bottomNavIconActive,
+                ]}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          ))}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Render FinanceScreen when finance tab is active
+  if (activeBottomTab === 'finance') {
+    return (
+      <SafeAreaView style={styles.fullScreenContainer} edges={['top', 'left', 'right']}>
+        <View style={styles.menuScreenWrapper}>
+          <FinanceScreen 
             configData={configData}
           />
         </View>
@@ -2766,7 +2927,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
                     return;
                   }
                 }
-                showToast('Error loading invoice PDF', 'error');
               }}
               onHttpError={(syntheticEvent) => {
                 const { nativeEvent } = syntheticEvent;
@@ -2798,7 +2958,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
                     return;
                   }
                 }
-                showToast('Error loading invoice PDF', 'error');
               }}
             />
           ) : (

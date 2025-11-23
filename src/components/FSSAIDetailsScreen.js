@@ -21,8 +21,7 @@ import InfoBanner from './InfoBanner';
 import { useToast } from './ToastContext';
 
 const FSSAIDetailsScreen = ({ onBack, onProceed }) => {
-  const { showToast } = useToast();
-  const [hasValidFSSAI, setHasValidFSSAI] = useState(false);
+    const [hasValidFSSAI, setHasValidFSSAI] = useState(false);
   const [fssaiRegistrationNumber, setFssaiRegistrationNumber] = useState('');
   const [expirationDate, setExpirationDate] = useState('');
   const [licenseType, setLicenseType] = useState('');
@@ -89,11 +88,9 @@ const FSSAIDetailsScreen = ({ onBack, onProceed }) => {
 
   const handleValidateFSSAI = () => {
     if (!fssaiRegistrationNumber) {
-      showToast('Please enter FSSAI Registration Number first', 'error');
       return;
     }
     // Implement FSSAI validation logic here
-    showToast('FSSAI Registration Number validated', 'success');
   };
 
   const handleDateIconPress = () => {
@@ -122,7 +119,6 @@ const FSSAIDetailsScreen = ({ onBack, onProceed }) => {
     if (onProceed) {
       onProceed();
     } else {
-      showToast('FSSAI details submitted successfully', 'success');
     }
   };
 

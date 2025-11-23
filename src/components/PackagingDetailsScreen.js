@@ -28,8 +28,7 @@ import InfoBanner from './InfoBanner';
 import { useToast } from './ToastContext';
 
 const PackagingDetailsScreen = ({ onBack, onProceed }) => {
-  const { showToast } = useToast();
-  
+    
   // Packaging Details
   const [orderPackagingCharges, setOrderPackagingCharges] = useState('');
   const [itemPackagingCharges, setItemPackagingCharges] = useState('');
@@ -104,7 +103,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
 
   const handleAddSlot = () => {
     if (slots.length >= 2) {
-      showToast('Maximum 2 slots allowed', 'error');
       return;
     }
     setSlots([
@@ -200,7 +198,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectGallery = async () => {
     const hasPermission = await requestStoragePermission();
     if (!hasPermission) {
-      showToast('Storage permission is required', 'error');
       return;
     }
 
@@ -217,7 +214,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
             return;
           }
           if (response.errorMessage) {
-            showToast(response.errorMessage, 'error');
             return;
           }
           if (response.assets && response.assets[0]) {
@@ -229,7 +225,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
               size: asset.fileSize,
             };
             setMenuImageFile(fileData);
-            showToast('Menu image selected from gallery', 'success');
           }
         },
       );
@@ -246,7 +241,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
             return;
           }
           if (response.errorMessage) {
-            showToast(response.errorMessage, 'error');
             return;
           }
           if (response.assets && response.assets[0]) {
@@ -258,7 +252,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
               size: asset.fileSize,
             };
             setTakeawayBillFile(fileData);
-            showToast('Takeaway bill image selected from gallery', 'success');
           }
         },
       );
@@ -269,7 +262,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectCamera = async () => {
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) {
-      showToast('Camera permission is required', 'error');
       return;
     }
 
@@ -285,7 +277,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
           return;
         }
         if (response.errorMessage) {
-          showToast(response.errorMessage, 'error');
           return;
         }
         if (response.assets && response.assets[0]) {
@@ -301,7 +292,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
           } else {
             setTakeawayBillFile(fileData);
           }
-          showToast('Photo captured', 'success');
         }
       },
     );
@@ -311,7 +301,6 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectFiles = async () => {
     const hasPermission = await requestStoragePermission();
     if (!hasPermission) {
-      showToast('Storage permission is required', 'error');
       return;
     }
 
@@ -332,14 +321,12 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
           } else {
             setTakeawayBillFile(fileData);
           }
-          showToast('File selected', 'success');
         }
       })
       .catch((err) => {
         if (DocumentPicker.isCancel(err)) {
           // User cancelled
         } else {
-          showToast('Error selecting file', 'error');
         }
       });
     setShowUploadBottomSheet(false);
@@ -348,43 +335,33 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
   const handleProceed = () => {
     // Validate all required fields
     if (!orderPackagingCharges) {
-      showToast('Please select if there are order packaging charges', 'error');
       return;
     }
     if (!itemPackagingCharges) {
-      showToast('Please select if there are item packaging charges', 'error');
       return;
     }
     if (!cuisineType) {
-      showToast('Please select cuisine type', 'error');
       return;
     }
     if (!costForTwo) {
-      showToast('Please enter cost for two', 'error');
       return;
     }
     if (!isPureVegetarian) {
-      showToast('Please select if restaurant is pure vegetarian', 'error');
       return;
     }
     if (!menuType) {
-      showToast('Please select menu type', 'error');
       return;
     }
     if (!menuImageFile) {
-      showToast('Please upload menu image', 'error');
       return;
     }
     if (!takeAwayBillType) {
-      showToast('Please select take away bill type', 'error');
       return;
     }
     if (!takeawayBillFile) {
-      showToast('Please upload takeaway bill', 'error');
       return;
     }
     if (!days) {
-      showToast('Please select days', 'error');
       return;
     }
     
@@ -392,11 +369,9 @@ const PackagingDetailsScreen = ({ onBack, onProceed }) => {
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       if (!slot.openingTime) {
-        showToast(`Please select opening hours for Slot ${i + 1}`, 'error');
         return;
       }
       if (!slot.closingTime) {
-        showToast(`Please select closing hours for Slot ${i + 1}`, 'error');
         return;
       }
     }

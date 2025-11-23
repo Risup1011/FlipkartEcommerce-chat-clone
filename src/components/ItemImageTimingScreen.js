@@ -23,8 +23,7 @@ import { API_BASE_URL } from '../config';
 import { fetchWithAuth, getApiHeaders } from '../utils/apiHelpers';
 
 const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
-  const { showToast } = useToast();
-  const [screenData, setScreenData] = useState(null); // Store backend screen configuration
+    const [screenData, setScreenData] = useState(null); // Store backend screen configuration
   const [loadingScreenData, setLoadingScreenData] = useState(true); // Loading state for screen config
   const [uploadedImages, setUploadedImages] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -182,7 +181,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
 
       if (result.errorMessage) {
         const errorMsg = screenData?.messages?.error?.image_selection_failed || result.errorMessage;
-        showToast(errorMsg, 'error');
         return;
       }
 
@@ -205,7 +203,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         const validImages = newImages.filter((img) => {
           if (img.fileSize > maxSize) {
             const errorMsg = maxSizeText.replace('{fileName}', img.fileName).replace('{maxSize}', maxSizeMB);
-            showToast(errorMsg, 'error');
             return false;
           }
           return true;
@@ -214,13 +211,11 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         if (validImages.length > 0) {
           setUploadedImages((prev) => [...prev, ...validImages]);
           const successMsg = screenData?.messages?.success?.images_added || `${validImages.length} image(s) added`;
-          showToast(successMsg.replace('{count}', validImages.length), 'success');
         }
       }
     } catch (error) {
       console.error('Error selecting images:', error);
       const errorMsg = screenData?.messages?.error?.image_selection_failed || 'Failed to select images';
-      showToast(errorMsg, 'error');
     }
   };
 
@@ -283,21 +278,17 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
                 if (deleteResult.success) {
                   // Successfully deleted from server, remove from state
                   setUploadedImages((prev) => prev.filter((img) => img.id !== imageId));
-                  showToast(removedMsg, 'success');
                 } else {
                   // Failed to delete from server, show error
-                  showToast(deleteResult.error || deleteErrorMsg, 'error');
                   return; // Don't remove from state if API call failed
                 }
               } catch (error) {
                 console.error('❌ [ItemImageTimingScreen] Error in delete operation:', error);
-                showToast(deleteErrorMsg, 'error');
                 return; // Don't remove from state if there was an error
               }
             } else {
               // For new images (not yet uploaded), just remove from state
               setUploadedImages((prev) => prev.filter((img) => img.id !== imageId));
-              showToast(removedMsg, 'success');
             }
           },
         },
@@ -330,7 +321,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
           style: 'destructive',
           onPress: () => {
             // Handle delete action
-            showToast(deletedMsg, 'success');
             onBack();
           },
         },
@@ -341,7 +331,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
   const uploadImage = async (image) => {
     if (!itemId) {
       const errorMsg = screenData?.messages?.validation?.item_id_required || 'Item ID is missing';
-      showToast(errorMsg, 'error');
       return null;
     }
 
@@ -379,13 +368,11 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
       } else {
         const errorMessage = data.message || screenData?.messages?.error?.upload_failed || 'Failed to upload image';
         console.error('❌ [ItemImageTimingScreen] Upload failed:', errorMessage);
-        showToast(errorMessage, 'error');
         return null;
       }
     } catch (error) {
       console.error('❌ [ItemImageTimingScreen] Error uploading image:', error);
       const errorMsg = screenData?.messages?.error?.upload_failed || 'Failed to upload image';
-      showToast(errorMsg, 'error');
       return null;
     }
   };
@@ -393,13 +380,11 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
   const handleSubmit = async () => {
     if (uploadedImages.length === 0) {
       const errorMsg = screenData?.messages?.validation?.images_required || 'Please upload at least one image';
-      showToast(errorMsg, 'error');
       return;
     }
 
     if (!itemId) {
       const errorMsg = screenData?.messages?.validation?.item_id_required || 'Item ID is missing';
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -451,7 +436,6 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
 
       if (successCount === 0 && newImages.length > 0) {
         const errorMsg = screenData?.messages?.error?.upload_failed || 'Failed to upload images. Please try again.';
-        showToast(errorMsg, 'error');
         setUploading(false);
         return;
       }
@@ -469,13 +453,11 @@ const ItemImageTimingScreen = ({ itemId, itemName, onBack, onSave }) => {
         await onSave(submitData);
       } else {
         const successMsg = screenData?.messages?.success?.images_uploaded || 'Images uploaded successfully';
-        showToast(successMsg, 'success');
         onBack();
       }
     } catch (error) {
       console.error('❌ [ItemImageTimingScreen] Error submitting:', error);
       const errorMsg = screenData?.messages?.error?.upload_failed || 'Failed to upload images';
-      showToast(errorMsg, 'error');
     } finally {
       setUploading(false);
       setUploadProgress({});  

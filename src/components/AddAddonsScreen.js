@@ -19,8 +19,7 @@ import { API_BASE_URL } from '../config';
 import { useToast } from './ToastContext';
 
 const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallback, addonType = 'ADD_ONS', addonTitle = 'Add-ons', itemData = null, onItemDataUpdate = null, configData = null }) => {
-  const { showToast } = useToast();
-  // For CUSTOM addons, start with empty string if new, otherwise use addonTitle
+    // For CUSTOM addons, start with empty string if new, otherwise use addonTitle
   const [customizationTitle, setCustomizationTitle] = useState(
     addonType === 'CUSTOM' ? '' : addonTitle
   );
@@ -133,20 +132,17 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
   const handleSaveSettings = async () => {
     if (!itemData || !itemData.id) {
       const errorMsg = getUILabel('item_data_missing', 'Item data is missing');
-      showToast(errorMsg, 'error');
       return;
     }
 
     if (linkedAddons.length === 0) {
       const errorMsg = getUILabel('addon_at_least_one_required', 'Please add at least one add-on before saving settings');
-      showToast(errorMsg, 'error');
       return;
     }
 
     // Validate min selection
     if (isCompulsory && (!minSelection || minSelection === '')) {
       const errorMsg = getUILabel('min_selection_required_compulsory', 'Please select minimum selection for compulsory add-ons');
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -189,7 +185,6 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
         const successMsg = getUILabel('addon_settings_saved_success', 'Customization settings saved successfully');
-        showToast(successMsg, 'success');
         
         // Use the updated item data from response if available
         if (data.data) {
@@ -220,12 +215,10 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
       } else {
         const errorMessage = data.message || data.error || 'Failed to update add-on settings';
         console.error('❌ [AddAddonsScreen] Failed to update add-ons:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [AddAddonsScreen] Error saving customization settings:', error);
       const errorMsg = getUILabel('addon_save_settings_error', 'Failed to save customization settings');
-      showToast(errorMsg, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -235,7 +228,6 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
   const handleRemoveAddon = async (addonId) => {
     if (!itemData || !itemData.id) {
       const errorMsg = getUILabel('item_data_missing', 'Item data is missing');
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -254,7 +246,6 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
         const successMsg = getUILabel('addon_removed_success', 'Add-on removed successfully');
-        showToast(successMsg, 'success');
         // Call onDelete callback to refresh item data before updating local state
         if (onDeleteCallback) {
           await onDeleteCallback();
@@ -278,12 +269,10 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
       } else {
         const errorMessage = data.message || data.error || 'Failed to remove add-on';
         console.error('❌ [AddAddonsScreen] Failed to remove add-on:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [AddAddonsScreen] Error removing add-on:', error);
       const errorMsg = getUILabel('addon_remove_error', 'Failed to remove add-on');
-      showToast(errorMsg, 'error');
     } finally {
       setIsRemoving(false);
     }

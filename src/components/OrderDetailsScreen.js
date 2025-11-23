@@ -18,8 +18,7 @@ import { API_BASE_URL } from '../config';
 import { useToast } from './ToastContext';
 
 const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
-  const { showToast } = useToast();
-  const [showTimePicker, setShowTimePicker] = useState(false);
+    const [showTimePicker, setShowTimePicker] = useState(false);
   const [estimatedTime, setEstimatedTime] = useState(15);
   const [customTimeInput, setCustomTimeInput] = useState('');
   const [orderData, setOrderData] = useState(order);
@@ -109,7 +108,6 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
               setOrderData(order);
               setEstimatedTime(order?.preparationTimeMinutes || order?.estimatedTime || 15);
             } else {
-              showToast('Failed to load order details', 'error');
               if (onBack) onBack();
             }
           }
@@ -124,7 +122,6 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
             setOrderData(order);
             setEstimatedTime(order?.preparationTimeMinutes || order?.estimatedTime || 15);
           } else {
-            showToast('Error loading order details', 'error');
             if (onBack) onBack();
           }
         } finally {
@@ -341,7 +338,6 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
   // Handle accept order API call
   const handleAcceptOrder = async () => {
     if (!orderData || !orderData.id) {
-      showToast('Order ID not available', 'error');
       return;
     }
 
@@ -366,7 +362,6 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
 
       if (response.ok && responseData?.code === 200) {
         console.log(`✅ [OrderDetailsScreen] Order accepted successfully`);
-        showToast('Order accepted successfully', 'success');
         
         // Update order data with the response
         if (responseData.data) {
@@ -388,11 +383,9 @@ const OrderDetailsScreen = ({ order, orderId, onBack, onAccept, onDeny }) => {
       } else {
         console.error(`❌ [OrderDetailsScreen] Failed to accept order:`, response.status, responseData);
         const errorMessage = responseData?.message || 'Failed to accept order';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error(`❌ [OrderDetailsScreen] Error accepting order:`, error);
-      showToast('Error accepting order. Please try again.', 'error');
     } finally {
       setIsAccepting(false);
     }

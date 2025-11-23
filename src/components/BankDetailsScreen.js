@@ -24,8 +24,7 @@ import { useToast } from './ToastContext';
 import { Keyboard } from 'react-native';
 
 const BankDetailsScreen = ({ onBack, onProceed }) => {
-  const { showToast } = useToast();
-  const [accountNumber, setAccountNumber] = useState('');
+    const [accountNumber, setAccountNumber] = useState('');
   const [ifscCode, setIfscCode] = useState('');
   const [beneficiaryName, setBeneficiaryName] = useState('');
   const [bankCity, setBankCity] = useState('');
@@ -144,7 +143,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectGallery = async () => {
     const hasPermission = await requestStoragePermission();
     if (!hasPermission) {
-      showToast('Storage permission is required', 'error');
       return;
     }
 
@@ -162,7 +160,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
               return;
             }
             if (response.errorMessage) {
-              showToast(response.errorMessage, 'error');
               return;
             }
             if (response.assets && response.assets[0]) {
@@ -174,7 +171,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
                 size: asset.fileSize,
               };
               setChequeFile(fileData);
-              showToast('File selected from gallery', 'success');
             }
           },
         );
@@ -193,14 +189,12 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
                 size: response[0].size,
               };
               setChequeFile(fileData);
-              showToast('File selected', 'success');
             }
           })
           .catch((err) => {
             if (DocumentPicker.isCancel(err)) {
               // User cancelled
             } else {
-              showToast('Error selecting file', 'error');
             }
           });
       }
@@ -219,7 +213,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
               return;
             }
             if (response.errorMessage) {
-              showToast(response.errorMessage, 'error');
               return;
             }
             if (response.assets && response.assets[0]) {
@@ -231,7 +224,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
                 size: asset.fileSize,
               };
               setKycFile(fileData);
-              showToast('File selected from gallery', 'success');
             }
           },
         );
@@ -250,14 +242,12 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
                 size: response[0].size,
               };
               setKycFile(fileData);
-              showToast('File selected', 'success');
             }
           })
           .catch((err) => {
             if (DocumentPicker.isCancel(err)) {
               // User cancelled
             } else {
-              showToast('Error selecting file', 'error');
             }
           });
       }
@@ -268,7 +258,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectCamera = async () => {
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) {
-      showToast('Camera permission is required', 'error');
       return;
     }
 
@@ -284,7 +273,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
           return;
         }
         if (response.errorMessage) {
-          showToast(response.errorMessage, 'error');
           return;
         }
         if (response.assets && response.assets[0]) {
@@ -300,7 +288,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
           } else {
             setKycFile(fileData);
           }
-          showToast('Photo captured', 'success');
         }
       },
     );
@@ -310,7 +297,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectFiles = async () => {
     const hasPermission = await requestStoragePermission();
     if (!hasPermission) {
-      showToast('Storage permission is required', 'error');
       return;
     }
 
@@ -331,14 +317,12 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
           } else {
             setKycFile(fileData);
           }
-          showToast('File selected', 'success');
         }
       })
       .catch((err) => {
         if (DocumentPicker.isCancel(err)) {
           // User cancelled
         } else {
-          showToast('Error selecting file', 'error');
         }
       });
     setShowUploadBottomSheet(false);
@@ -384,7 +368,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      showToast('Please fill all required fields', 'error');
       return;
     }
     
@@ -395,7 +378,6 @@ const BankDetailsScreen = ({ onBack, onProceed }) => {
     if (onProceed) {
       onProceed();
     } else {
-      showToast('Bank details submitted successfully', 'success');
     }
   };
 

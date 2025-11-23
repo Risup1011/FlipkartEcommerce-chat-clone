@@ -25,8 +25,7 @@ try {
 }
 
 const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyOrder }) => {
-  const { showToast } = useToast();
-  const [localOrders, setLocalOrders] = useState(orders);
+    const [localOrders, setLocalOrders] = useState(orders);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderDetails, setShowOrderDetails] = useState(false);
   const soundPlayedRef = useRef(false);
@@ -147,13 +146,15 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
       onAcceptOrder(order);
     }
     setLocalOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
-    showToast('Order accepted successfully', 'success');
     
     // Close screen if no more orders
-    if (localOrders.length === 1) {
-      setTimeout(() => {
+    if (localOrders.length <= 1) {
+      // Close immediately when this was the last order
+      try {
         onClose();
-      }, 500);
+      } catch (e) {
+        console.warn('Error calling onClose after accept:', e);
+      }
     }
   };
 
@@ -174,13 +175,14 @@ const NewOrdersScreen = ({ visible, onClose, orders = [], onAcceptOrder, onDenyO
               onDenyOrder(order);
             }
             setLocalOrders(prevOrders => prevOrders.filter(o => o.id !== order.id));
-            showToast('Order denied', 'info');
             
             // Close screen if no more orders
-            if (localOrders.length === 1) {
-              setTimeout(() => {
+            if (localOrders.length <= 1) {
+              try {
                 onClose();
-              }, 500);
+              } catch (e) {
+                console.warn('Error calling onClose after deny:', e);
+              }
             }
           },
         },

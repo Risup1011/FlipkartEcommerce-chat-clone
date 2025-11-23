@@ -25,8 +25,7 @@ import InfoBanner from './InfoBanner';
 import { useToast } from './ToastContext';
 
 const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
-  const { showToast } = useToast();
-  const [panNumber, setPanNumber] = useState('');
+    const [panNumber, setPanNumber] = useState('');
   const [panOwnerName, setPanOwnerName] = useState('');
   const [panDocUploadType, setPanDocUploadType] = useState('Image');
   const [panCardFile, setPanCardFile] = useState(null);
@@ -73,20 +72,16 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
 
   const handleVerifyPAN = () => {
     if (!panNumber) {
-      showToast('Please enter PAN number first', 'error');
       return;
     }
     // Implement PAN verification logic here
-    showToast('PAN verified successfully', 'success');
   };
 
   const handleVerifyGSTIN = () => {
     if (!restaurantGSTIN) {
-      showToast('Please enter GSTIN number first', 'error');
       return;
     }
     // Implement GSTIN verification logic here
-    showToast('GSTIN verified successfully', 'success');
   };
 
   const handlePanCardUpload = () => {
@@ -144,7 +139,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectGallery = async () => {
     const hasPermission = await requestStoragePermission();
     if (!hasPermission) {
-      showToast('Storage permission is required', 'error');
       return;
     }
 
@@ -160,7 +154,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
           return;
         }
         if (response.errorMessage) {
-          showToast(response.errorMessage, 'error');
           return;
         }
         if (response.assets && response.assets[0]) {
@@ -176,7 +169,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
           } else {
             setGstCertificateFile(fileData);
           }
-          showToast('File selected from gallery', 'success');
         }
       },
     );
@@ -185,7 +177,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
   const handleSelectCamera = async () => {
     const hasPermission = await requestCameraPermission();
     if (!hasPermission) {
-      showToast('Camera permission is required', 'error');
       return;
     }
 
@@ -201,7 +192,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
           return;
         }
         if (response.errorMessage) {
-          showToast(response.errorMessage, 'error');
           return;
         }
         if (response.assets && response.assets[0]) {
@@ -217,7 +207,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
           } else {
             setGstCertificateFile(fileData);
           }
-          showToast('File captured from camera', 'success');
         }
       },
     );
@@ -227,7 +216,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
     try {
       const hasPermission = await requestStoragePermission();
       if (!hasPermission) {
-        showToast('Storage permission is required', 'error');
         return;
       }
 
@@ -249,14 +237,12 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
         } else {
           setGstCertificateFile(fileData);
         }
-        showToast('File selected', 'success');
       }
     } catch (err) {
       if (DocumentPicker.isCancel(err)) {
         // User cancelled the picker
         return;
       } else {
-        showToast('Error selecting file', 'error');
         console.error(err);
       }
     }
@@ -298,7 +284,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      showToast('Please fill all required fields', 'error');
       return;
     }
     
@@ -309,7 +294,6 @@ const GSTINPANDetailsScreen = ({ onBack, onProceed }) => {
     if (onProceed) {
       onProceed();
     } else {
-      showToast('GSTIN & PAN details submitted successfully', 'success');
     }
   };
 

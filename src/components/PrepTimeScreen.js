@@ -17,8 +17,7 @@ import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
 const PrepTimeScreen = ({ onBack, configData }) => {
-  const { showToast } = useToast();
-  const [prepTime, setPrepTime] = useState('');
+    const [prepTime, setPrepTime] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -55,12 +54,10 @@ const PrepTimeScreen = ({ onBack, configData }) => {
       } else {
         console.error('❌ [PrepTimeScreen] Failed to fetch settings:', data.message);
         const errorMessage = getUILabel('load_prep_time_error', 'Failed to load prep time');
-        showToast(data.message || errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [PrepTimeScreen] Error fetching settings:', error);
       const errorMessage = getUILabel('load_prep_time_error', 'Failed to load prep time');
-      showToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -73,7 +70,6 @@ const PrepTimeScreen = ({ onBack, configData }) => {
 
       if (isNaN(prepTimeMinutes) || prepTimeMinutes < 0) {
         const errorMessage = getUILabel('invalid_prep_time_error', 'Please enter a valid prep time');
-        showToast(errorMessage, 'error');
         return;
       }
 
@@ -90,18 +86,15 @@ const PrepTimeScreen = ({ onBack, configData }) => {
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         const successMessage = getUILabel('prep_time_updated_success', 'Prep time updated successfully');
-        showToast(successMessage, 'success');
         if (onBack) {
           onBack();
         }
       } else {
         const errorMessage = data.message || getUILabel('update_prep_time_error', 'Failed to update prep time');
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [PrepTimeScreen] Error updating prep time:', error);
       const errorMessage = getUILabel('update_prep_time_error', 'Failed to update prep time');
-      showToast(errorMessage, 'error');
     } finally {
       setIsSaving(false);
     }

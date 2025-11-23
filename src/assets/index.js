@@ -9,6 +9,8 @@ export const images = {
   congrats: require('./images/Congrats.png'),
   newOrder: require('./images/NewOrder.png'),
   rightArrow: require('./images/right-arrow.png'),
+  barGraph: require('./images/Bargraph.png'),
+  lineGraph: require('./images/line-graph.png'),
 };
 
 // Icons

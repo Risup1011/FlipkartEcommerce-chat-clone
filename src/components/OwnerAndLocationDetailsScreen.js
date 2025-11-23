@@ -20,8 +20,7 @@ import InfoBanner from './InfoBanner';
 import { useToast } from './ToastContext';
 
 const OwnerAndLocationDetailsScreen = ({ onBack, onProceed }) => {
-  const { showToast } = useToast();
-  const [ownerOrManager, setOwnerOrManager] = useState('');
+    const [ownerOrManager, setOwnerOrManager] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [ownerMobileNumber, setOwnerMobileNumber] = useState('');
   const [ownerEmail, setOwnerEmail] = useState('');
@@ -95,20 +94,16 @@ const OwnerAndLocationDetailsScreen = ({ onBack, onProceed }) => {
 
   const handleGenerateOTP = () => {
     if (!managerMobileNumber || managerMobileNumber.length < 10) {
-      showToast('Please enter a valid manager mobile number', 'error');
       return;
     }
     // Implement OTP generation logic here
-    showToast('OTP has been sent to manager number', 'success');
   };
 
   const handleVerifyOTP = () => {
     if (!managerOTP) {
-      showToast('Please enter OTP', 'error');
       return;
     }
     // Implement OTP verification logic here
-    showToast('OTP verified successfully', 'success');
   };
 
   const handleProceed = () => {
@@ -157,7 +152,6 @@ const OwnerAndLocationDetailsScreen = ({ onBack, onProceed }) => {
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
-      showToast('Please fill all required fields', 'error');
       return;
     }
     
@@ -168,7 +162,6 @@ const OwnerAndLocationDetailsScreen = ({ onBack, onProceed }) => {
     if (onProceed) {
       onProceed();
     } else {
-      showToast('Owner and location details submitted successfully', 'success');
     }
   };
 

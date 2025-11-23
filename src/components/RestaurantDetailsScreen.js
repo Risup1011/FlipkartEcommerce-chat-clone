@@ -26,8 +26,7 @@ import { API_BASE_URL } from '../config';
 import { getApiHeaders, fetchWithAuth } from '../utils/apiHelpers';
 
 const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
-  const { showToast } = useToast();
-  
+    
   // Dynamic form state
   const [sectionData, setSectionData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,9 +86,7 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         // Check if it's the "No static resource" error (endpoint doesn't exist)
         if (errorMessage.includes('No static resource')) {
           const friendlyMessage = 'Form configuration endpoint not available. Please contact support.';
-          showToast(friendlyMessage, 'error');
         } else {
-          showToast(errorMessage, 'error');
         }
         setLoading(false);
         return;
@@ -158,7 +155,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
           }
         } else {
           console.error('❌ [RestaurantDetailsScreen] Section not found in response');
-          showToast('Form configuration not found', 'error');
         }
       } else {
         console.error('❌ [RestaurantDetailsScreen] API Call Failed');
@@ -168,7 +164,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         
         // Handle different error response formats
         const errorMessage = data.message || data.error || 'Failed to load form configuration';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [RestaurantDetailsScreen] ========================================');
@@ -177,7 +172,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       console.error('❌ [RestaurantDetailsScreen] Error Message:', error.message);
       console.error('❌ [RestaurantDetailsScreen] Error Stack:', error.stack);
       console.error('❌ [RestaurantDetailsScreen] ========================================');
-      showToast('Network error. Please check your connection.', 'error');
     } finally {
       setLoading(false);
     }
@@ -337,7 +331,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
           setFieldOptions(prev => ({ ...prev, [fieldKey]: [] }));
         } else {
           // Show toast for other errors (400, 401, 403, etc.)
-          showToast(errorMessage, 'error');
         }
       }
     } catch (error) {
@@ -351,7 +344,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       console.error(`❌ [RestaurantDetailsScreen] Options Source: ${optionsSource}`);
       console.error(`❌ [RestaurantDetailsScreen] Parameters:`, JSON.stringify(params, null, 2));
       console.error('❌ [RestaurantDetailsScreen] ========================================');
-      showToast(`Failed to load ${fieldKey} options`, 'error');
     } finally {
       setLoadingOptions(prev => ({ ...prev, [fieldKey]: false }));
     }
@@ -375,7 +367,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       if (!formData.state || formData.state.toString().trim() === '') {
         console.warn('⚠️ [RestaurantDetailsScreen] City selected without state');
         const stateMessage = sectionData?.messages?.validation?.select_state_first || 'Please select state first';
-        showToast(stateMessage, 'error');
         return;
       }
     } else if (fieldKey === 'area' && value) {
@@ -383,7 +374,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       if (!formData.city || formData.city.toString().trim() === '') {
         console.warn('⚠️ [RestaurantDetailsScreen] Area selected without city');
         const cityMessage = sectionData?.messages?.validation?.select_city_first || 'Please select state & city first';
-        showToast(cityMessage, 'error');
         return;
       }
     }
@@ -426,7 +416,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       console.warn('⚠️ [RestaurantDetailsScreen] Invalid phone number for OTP generation:', phoneNumber);
       // Use backend message if available, otherwise fallback
       const validationMessage = sectionData?.messages?.validation?.invalid_phone || 'Please enter a valid phone number';
-      showToast(validationMessage, 'error');
       return;
     }
 
@@ -460,12 +449,10 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
         }));
         // Use backend message if available, otherwise fallback
         const otpSentMessage = sectionData?.messages?.otp?.sent || 'OTP has been sent to your number';
-        showToast(otpSentMessage, 'success');
       } else {
         console.error(`❌ [RestaurantDetailsScreen] OTP generation failed for ${fieldKey}`);
         console.error(`❌ [RestaurantDetailsScreen] Error Code: ${data.code}`);
         console.error(`❌ [RestaurantDetailsScreen] Error Message: ${data.message}`);
-        showToast(data.message || 'Failed to send OTP', 'error');
       }
     } catch (error) {
       console.error('❌ [RestaurantDetailsScreen] ========================================');
@@ -473,7 +460,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       console.error(`❌ [RestaurantDetailsScreen] Error:`, error);
       console.error(`❌ [RestaurantDetailsScreen] Error Message:`, error.message);
       console.error('❌ [RestaurantDetailsScreen] ========================================');
-      showToast('Network error. Please try again.', 'error');
     }
   };
 
@@ -484,7 +470,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       console.warn('⚠️ [RestaurantDetailsScreen] OTP code is empty');
       // Use backend message if available, otherwise fallback
       const enterOtpMessage = sectionData?.messages?.validation?.enter_otp || 'Please enter OTP';
-      showToast(enterOtpMessage, 'error');
       return;
     }
 
@@ -492,7 +477,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       console.warn('⚠️ [RestaurantDetailsScreen] OTP ID not found, please generate OTP first');
       // Use backend message if available, otherwise fallback
       const generateOtpMessage = sectionData?.messages?.validation?.generate_otp_first || 'Please generate OTP first';
-      showToast(generateOtpMessage, 'error');
       return;
     }
 
@@ -528,7 +512,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       if (response.ok && data.code === 200 && data.status === 'success') {
         // Use backend message if available, otherwise fallback
         const otpVerifiedMessage = sectionData?.messages?.otp?.verified || 'OTP verified successfully';
-        showToast(otpVerifiedMessage, 'success');
         // Mark OTP as verified
         setOtpData(prev => ({
           ...prev,
@@ -549,18 +532,13 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
           console.warn(`⚠️ [RestaurantDetailsScreen] OTP verification endpoint not found (404) - This is expected if the endpoint is not configured in the mock API`);
           console.warn(`⚠️ [RestaurantDetailsScreen] Please configure the endpoint: ${endpoint}`);
           const endpointError = sectionData?.messages?.error?.endpoint_not_configured || 'OTP verification endpoint not configured. Please check API setup.';
-          showToast(endpointError, 'error');
         } else if (response.status === 400 && (data.error_code === 'INVALID_OTP' || errorCode === 400)) {
           const invalidOtpMessage = sectionData?.messages?.otp?.invalid || 'Invalid OTP. Please try again.';
-          showToast(invalidOtpMessage, 'error');
         } else if (response.status === 410 && (data.error_code === 'OTP_EXPIRED' || errorCode === 410)) {
           const expiredOtpMessage = sectionData?.messages?.otp?.expired || 'OTP has expired. Please request a new one.';
-          showToast(expiredOtpMessage, 'error');
         } else if (response.status === 429 && (data.error_code === 'OTP_ATTEMPTS_EXCEEDED' || errorCode === 429)) {
           const maxAttemptsMessage = sectionData?.messages?.otp?.max_attempts || 'Maximum attempts exceeded. Please try again later.';
-          showToast(maxAttemptsMessage, 'error');
         } else {
-          showToast(errorMessage, 'error');
         }
       }
     } catch (error) {
@@ -569,7 +547,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       console.error(`❌ [RestaurantDetailsScreen] Error:`, error);
       console.error(`❌ [RestaurantDetailsScreen] Error Message:`, error.message);
       console.error('❌ [RestaurantDetailsScreen] ========================================');
-      showToast('Network error. Please try again.', 'error');
     }
   };
 
@@ -602,7 +579,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
             if (!formData.state || formData.state.toString().trim() === '') {
               console.warn('⚠️ [RestaurantDetailsScreen] Attempted to open city dropdown without state');
               const stateMessage = sectionData?.messages?.validation?.select_state_first || 'Please select state first';
-              showToast(stateMessage, 'error');
               return false; // Prevent dropdown from opening
             }
           } else if (field.key === 'area') {
@@ -610,7 +586,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
             if (!formData.city || formData.city.toString().trim() === '') {
               console.warn('⚠️ [RestaurantDetailsScreen] Attempted to open area dropdown without city');
               const cityMessage = sectionData?.messages?.validation?.select_city_first || 'Please select city first';
-              showToast(cityMessage, 'error');
               return false; // Prevent dropdown from opening
             }
           }
@@ -797,7 +772,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       
       // Use backend message if available, otherwise fallback
       const validationMessage = sectionData?.messages?.validation?.required_fields || 'Please fill all required fields';
-      showToast(validationMessage, 'error');
       return;
     }
     
@@ -818,7 +792,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
     // Submit to API
     if (!partnerId) {
       console.error('❌ [RestaurantDetailsScreen] Partner ID is missing');
-      showToast('Partner ID is required. Please login again.', 'error');
       return;
     }
 
@@ -843,7 +816,6 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         const successMessage = sectionData?.messages?.success?.form_submitted || data.message || 'Restaurant details submitted successfully';
-        showToast(successMessage, 'success');
         
         // Navigate to next screen
         if (onProceed) {
@@ -852,11 +824,9 @@ const RestaurantDetailsScreen = ({ partnerId, onBack, onProceed }) => {
       } else {
         console.error('❌ [RestaurantDetailsScreen] Form submission failed');
         const errorMessage = data.message || 'Failed to submit form. Please try again.';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [RestaurantDetailsScreen] Network error:', error);
-      showToast('Network error. Please check your connection and try again.', 'error');
     } finally {
       setSubmitting(false);
     }

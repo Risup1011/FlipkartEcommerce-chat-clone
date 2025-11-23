@@ -19,8 +19,7 @@ import InfoBanner from './InfoBanner';
 import { useToast } from './ToastContext';
 
 const MoUESignDetailsScreen = ({ onBack, onProceed }) => {
-  const { showToast } = useToast();
-  const [hasReadMOU, setHasReadMOU] = useState(false);
+    const [hasReadMOU, setHasReadMOU] = useState(false);
   const [hasReadGSTDeclaration, setHasReadGSTDeclaration] = useState(false);
   const [ownerNumber, setOwnerNumber] = useState('');
   const [otp, setOtp] = useState('');
@@ -41,68 +40,55 @@ const MoUESignDetailsScreen = ({ onBack, onProceed }) => {
 
   const handleGenerateOTP = () => {
     if (!ownerNumber || ownerNumber.length < 10) {
-      showToast('Please enter a valid owner number', 'error');
       return;
     }
     // Implement OTP generation logic here
     setIsOTPGenerated(true);
-    showToast('OTP has been sent to your number', 'success');
   };
 
   const handleVerifyOTP = () => {
     if (!otp) {
-      showToast('Please enter OTP', 'error');
       return;
     }
     if (otp.length < 6) {
-      showToast('Please enter a valid 6-digit OTP', 'error');
       return;
     }
     // Implement OTP verification logic here
     setIsOTPVerified(true);
     setIsDocumentSigned(true);
-    showToast('OTP verified successfully. Document signed!', 'success');
   };
 
   const handleViewMOU = () => {
     // Implement view MOU logic here
-    showToast('Opening MOU document...', 'info');
   };
 
   const handleViewGSTDeclaration = () => {
     // Implement view GST Declaration logic here
-    showToast('Opening GST Declaration document...', 'info');
   };
 
   const handleViewBankDocuments = () => {
     // Implement view Bank Documents logic here
-    showToast('Opening Bank Documents...', 'info');
   };
 
   const handleViewSignedMOU = () => {
     // Implement view signed MOU logic here
-    showToast('Opening signed MOU document...', 'info');
   };
 
   const handleViewAllESignedDocuments = () => {
     // Implement view all e-signed documents logic here
-    showToast('Opening all e-signed documents...', 'info');
   };
 
   const handleProceed = () => {
     if (!hasReadMOU) {
-      showToast('Please confirm that you have read the MOU', 'error');
       return;
     }
     if (!isDocumentSigned) {
-      showToast('Please complete the document signing process', 'error');
       return;
     }
     // Navigate to next screen
     if (onProceed) {
       onProceed();
     } else {
-      showToast('MoU/E-Sign details completed successfully', 'success');
     }
   };
 

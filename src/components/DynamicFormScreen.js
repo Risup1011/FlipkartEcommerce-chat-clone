@@ -30,8 +30,7 @@ import { API_BASE_URL } from '../config';
 import { getApiHeaders, fetchWithAuth } from '../utils/apiHelpers';
 
 const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
-  const { showToast } = useToast();
-  
+    
   // Dynamic form state
   const [sectionData, setSectionData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -96,9 +95,7 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         // Check if it's the "No static resource" error (endpoint doesn't exist)
         if (errorMessage.includes('No static resource')) {
           const friendlyMessage = 'Form configuration endpoint not available. Please contact support.';
-          showToast(friendlyMessage, 'error');
         } else {
-          showToast(errorMessage, 'error');
         }
         setLoading(false);
         return;
@@ -163,7 +160,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
           });
         } else {
           console.error('❌ [DynamicFormScreen] Section not found in response');
-          showToast('Form configuration not found', 'error');
         }
       } else {
         console.error('❌ [DynamicFormScreen] API Call Failed');
@@ -173,7 +169,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         
         // Handle different error response formats
         const errorMessage = data.message || data.error || 'Failed to load form configuration';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [DynamicFormScreen] ========================================');
@@ -182,7 +177,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       console.error('❌ [DynamicFormScreen] Error Message:', error.message);
       console.error('❌ [DynamicFormScreen] Error Stack:', error.stack);
       console.error('❌ [DynamicFormScreen] ========================================');
-      showToast('Network error. Please check your connection.', 'error');
     } finally {
       setLoading(false);
     }
@@ -337,7 +331,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
           console.warn(`⚠️ [DynamicFormScreen] - Received:`, JSON.stringify(data, null, 2));
           setFieldOptions(prev => ({ ...prev, [fieldKey]: [] }));
         } else {
-          showToast(errorMessage, 'error');
         }
       }
     } catch (error) {
@@ -351,7 +344,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       console.error(`❌ [DynamicFormScreen] Options Source: ${optionsSource}`);
       console.error(`❌ [DynamicFormScreen] Parameters:`, JSON.stringify(params, null, 2));
       console.error('❌ [DynamicFormScreen] ========================================');
-      showToast(`Failed to load ${fieldKey} options`, 'error');
     } finally {
       setLoadingOptions(prev => ({ ...prev, [fieldKey]: false }));
     }
@@ -439,7 +431,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       }
     } catch (error) {
       console.error('Error selecting from gallery:', error);
-      showToast('Failed to select image from gallery', 'error');
     }
   };
 
@@ -459,7 +450,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      showToast('Failed to take photo', 'error');
     }
   };
 
@@ -484,7 +474,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       if (DocumentPicker.isCancel(error)) {
       } else {
         console.error('Error selecting file:', error);
-        showToast('Failed to select file', 'error');
       }
     }
   };
@@ -493,7 +482,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
   const uploadFile = async (file, fieldKey) => {
     if (!partnerId) {
       console.error('❌ [DynamicFormScreen] Partner ID is missing for file upload');
-      showToast('Partner ID is required. Please login again.', 'error');
       return null;
     }
 
@@ -543,7 +531,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         console.error(`❌ [DynamicFormScreen] HTTP ERROR: ${response.status} ${response.statusText}`);
         console.error(`❌ [DynamicFormScreen] Response Text:`, errorText);
         console.error('❌ [DynamicFormScreen] ========================================');
-        showToast(`Upload failed: ${response.status} ${response.statusText}`, 'error');
         return null;
       }
 
@@ -561,7 +548,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         } else {
           console.error('❌ [DynamicFormScreen] File URL not found in response');
           console.error('❌ [DynamicFormScreen] Response data:', JSON.stringify(data, null, 2));
-          showToast('File uploaded but URL not received', 'error');
           return null;
         }
       } else {
@@ -571,7 +557,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         console.error(`❌ [DynamicFormScreen] Data Code: ${data.code} (expected: 200 or 201)`);
         console.error(`❌ [DynamicFormScreen] Data Status: ${data.status} (expected: 'success')`);
         const errorMessage = data.message || 'Failed to upload file. Please try again.';
-        showToast(errorMessage, 'error');
         return null;
       }
     } catch (error) {
@@ -593,7 +578,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       }
       
       console.error('❌ [DynamicFormScreen] ========================================');
-      showToast('Network error. Please try again.', 'error');
       return null;
     } finally {
       setUploading(false);
@@ -613,7 +597,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
     
     
     if (!allowedTypes.includes(fileExtension)) {
-      showToast(`File type not allowed. Allowed types: ${allowedTypes.join(', ')}`, 'error');
       return;
     }
 
@@ -623,20 +606,16 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
     
     
     if (fileSizeMB > maxSizeMB) {
-      showToast(`File size exceeds ${maxSizeMB}MB limit`, 'error');
       return;
     }
 
     // Upload file and get file_url
-    showToast('Uploading file...', 'info');
     const fileUrl = await uploadFile(file, fieldKey);
     
     if (fileUrl) {
       // Store file_url instead of file object
       handleFieldChange(fieldKey, fileUrl);
-      showToast('File uploaded successfully', 'success');
     } else {
-      showToast('Failed to upload file', 'error');
     }
   };
 
@@ -646,7 +625,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
     if (!phoneNumber || phoneNumber.length < 10) {
       console.warn('⚠️ [DynamicFormScreen] Invalid phone number for OTP generation:', phoneNumber);
       const validationMessage = sectionData?.messages?.validation?.invalid_phone || 'Please enter a valid phone number';
-      showToast(validationMessage, 'error');
       return;
     }
 
@@ -679,12 +657,10 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
           },
         }));
         const otpSentMessage = sectionData?.messages?.otp?.sent || 'OTP has been sent to your number';
-        showToast(otpSentMessage, 'success');
       } else {
         console.error(`❌ [DynamicFormScreen] OTP generation failed for ${fieldKey}`);
         console.error(`❌ [DynamicFormScreen] Error Code: ${data.code}`);
         console.error(`❌ [DynamicFormScreen] Error Message: ${data.message}`);
-        showToast(data.message || 'Failed to send OTP', 'error');
       }
     } catch (error) {
       console.error('❌ [DynamicFormScreen] ========================================');
@@ -692,7 +668,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       console.error(`❌ [DynamicFormScreen] Error:`, error);
       console.error(`❌ [DynamicFormScreen] Error Message:`, error.message);
       console.error('❌ [DynamicFormScreen] ========================================');
-      showToast('Network error. Please try again.', 'error');
     }
   };
 
@@ -702,14 +677,12 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
     if (!otpCode) {
       console.warn('⚠️ [DynamicFormScreen] OTP code is empty');
       const enterOtpMessage = sectionData?.messages?.validation?.enter_otp || 'Please enter OTP';
-      showToast(enterOtpMessage, 'error');
       return;
     }
 
     if (!otpData[fieldKey]?.otp_id) {
       console.warn('⚠️ [DynamicFormScreen] OTP ID not found, please generate OTP first');
       const generateOtpMessage = sectionData?.messages?.validation?.generate_otp_first || 'Please generate OTP first';
-      showToast(generateOtpMessage, 'error');
       return;
     }
 
@@ -744,7 +717,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         const otpVerifiedMessage = sectionData?.messages?.otp?.verified || 'OTP verified successfully';
-        showToast(otpVerifiedMessage, 'success');
         setOtpData(prev => ({
           ...prev,
           [fieldKey]: { ...prev[fieldKey], verified: true },
@@ -762,18 +734,13 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
           console.warn(`⚠️ [DynamicFormScreen] OTP verification endpoint not found (404) - This is expected if the endpoint is not configured in the mock API`);
           console.warn(`⚠️ [DynamicFormScreen] Please configure the endpoint: ${endpoint}`);
           const endpointError = sectionData?.messages?.error?.endpoint_not_configured || 'OTP verification endpoint not configured. Please check API setup.';
-          showToast(endpointError, 'error');
         } else if (response.status === 400 && (data.error_code === 'INVALID_OTP' || errorCode === 400)) {
           const invalidOtpMessage = sectionData?.messages?.otp?.invalid || 'Invalid OTP. Please try again.';
-          showToast(invalidOtpMessage, 'error');
         } else if (response.status === 410 && (data.error_code === 'OTP_EXPIRED' || errorCode === 410)) {
           const expiredOtpMessage = sectionData?.messages?.otp?.expired || 'OTP has expired. Please request a new one.';
-          showToast(expiredOtpMessage, 'error');
         } else if (response.status === 429 && (data.error_code === 'OTP_ATTEMPTS_EXCEEDED' || errorCode === 429)) {
           const maxAttemptsMessage = sectionData?.messages?.otp?.max_attempts || 'Maximum attempts exceeded. Please try again later.';
-          showToast(maxAttemptsMessage, 'error');
         } else {
-          showToast(errorMessage, 'error');
         }
       }
     } catch (error) {
@@ -782,7 +749,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       console.error(`❌ [DynamicFormScreen] Error:`, error);
       console.error(`❌ [DynamicFormScreen] Error Message:`, error.message);
       console.error('❌ [DynamicFormScreen] ========================================');
-      showToast('Network error. Please try again.', 'error');
     }
   };
 
@@ -1071,7 +1037,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
         validationMessage = sectionData?.messages?.validation?.required_fields || 'Please fill all required fields';
       }
       
-      showToast(validationMessage, 'error');
       return;
     }
     
@@ -1092,7 +1057,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
     // Submit to API
     if (!partnerId) {
       console.error('❌ [DynamicFormScreen] Partner ID is missing');
-      showToast('Partner ID is required. Please login again.', 'error');
       return;
     }
 
@@ -1117,7 +1081,6 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         const successMessage = sectionData?.messages?.success?.form_submitted || data.message || 'Form submitted successfully';
-        showToast(successMessage, 'success');
         
         // Navigate to next screen
         if (onProceed) {
@@ -1126,11 +1089,9 @@ const DynamicFormScreen = ({ sectionId, partnerId, onBack, onProceed }) => {
       } else {
         console.error('❌ [DynamicFormScreen] Form submission failed');
         const errorMessage = data.message || 'Failed to submit form. Please try again.';
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [DynamicFormScreen] Network error:', error);
-      showToast('Network error. Please check your connection and try again.', 'error');
     } finally {
       setSubmitting(false);
     }

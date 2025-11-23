@@ -21,8 +21,7 @@ import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
 
 const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
-  const { showToast } = useToast();
-  const [timings, setTimings] = useState(null);
+    const [timings, setTimings] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [editingDay, setEditingDay] = useState(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -82,12 +81,10 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
       } else {
         console.error('❌ [OutletTimingsScreen] Failed to fetch timings:', data.message);
         const errorMessage = data.message || getUILabel('load_timings_error', 'Failed to load outlet timings');
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [OutletTimingsScreen] Error fetching timings:', error);
       const errorMessage = getUILabel('load_timings_error', 'Failed to load outlet timings');
-      showToast(errorMessage, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +161,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
       setSlots(slots.filter((_, i) => i !== index));
     } else {
       const errorMessage = getUILabel('min_slot_required_error', 'At least one time slot is required');
-      showToast(errorMessage, 'error');
     }
   };
 
@@ -178,7 +174,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
       // If open, validate slots
       if (slots.length === 0) {
         const errorMessage = getUILabel('add_slot_error', 'Please add at least one time slot');
-        showToast(errorMessage, 'error');
         return;
       }
 
@@ -186,7 +181,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
       for (const slot of slots) {
         if (!slot.open_time || !slot.close_time) {
           const errorMessage = getUILabel('fill_all_slots_error', 'Please fill all time slots');
-          showToast(errorMessage, 'error');
           return;
         }
         
@@ -198,7 +192,6 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
         
         if (openMinutes >= closeMinutes) {
           const errorMessage = getUILabel('open_before_close_error', 'Open time must be before close time');
-          showToast(errorMessage, 'error');
           return;
         }
       }
@@ -221,19 +214,16 @@ const OutletTimingsScreen = ({ onBack, configData, onNavigate }) => {
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         const successMessage = getUILabel('timings_updated_success', `Timings updated successfully for ${getDayLabel(editingDay)}`);
-        showToast(successMessage, 'success');
         // Refresh timings
         await fetchOutletTimings();
         handleCloseModal();
       } else {
         const errorMessage = data.message || getUILabel('update_timings_error', 'Failed to update timings');
         console.error('❌ [OutletTimingsScreen] Failed to update timings:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [OutletTimingsScreen] Error updating timings:', error);
       const errorMessage = getUILabel('update_timings_error', 'Failed to update timings');
-      showToast(errorMessage, 'error');
     } finally {
       setIsSaving(false);
     }

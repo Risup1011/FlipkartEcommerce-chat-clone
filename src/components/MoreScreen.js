@@ -22,8 +22,7 @@ let hasLoadedMoreDataOnce = false;
 let cachedMoreData = null;
 
 const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configData: configDataProp }) => {
-  const { showToast } = useToast();
-  const [moreData, setMoreData] = useState(() => {
+    const [moreData, setMoreData] = useState(() => {
     // Initialize with cached data if available
     return cachedMoreData;
   });
@@ -117,11 +116,9 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
           hasLoadedOnceRef.current = true;
         } else {
           console.error('❌ [MoreScreen] Failed to fetch more data:', data.message);
-          showToast(data.message || 'Failed to load more screen data', 'error');
         }
       } catch (error) {
         console.error('❌ [MoreScreen] Error fetching more data:', error);
-        showToast('Failed to load more screen data', 'error');
       } finally {
         setIsLoadingMoreData(false);
       }
@@ -206,17 +203,11 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
           };
           return updated;
         });
-        showToast(
-          value ? 'Receiving orders enabled' : 'Receiving orders disabled',
-          'success'
-        );
       } else {
         console.error('❌ [MoreScreen] Failed to update order receiving status:', data.message);
-        showToast(data.message || 'Failed to update order receiving status', 'error');
       }
     } catch (error) {
       console.error('❌ [MoreScreen] Error toggling order receiving:', error);
-      showToast('Failed to update order receiving status', 'error');
     } finally {
       setIsTogglingOrders(false);
     }
@@ -254,14 +245,11 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
             onNavigate('helpCenter');
             break;
           default:
-            showToast(`${menuItem.title} - Coming soon`, 'info');
         }
       } else {
         console.warn('⚠️  [MoreScreen] onNavigate callback not provided');
-        showToast(`${menuItem.title} - Coming soon`, 'info');
       }
     } else {
-      showToast(`${menuItem.title} - Coming soon`, 'info');
     }
   };
 
@@ -359,7 +347,6 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
       const successMessage = getUILabel('logout_success_message', 'Logged out successfully');
       
       // Show toast
-      showToast(successMessage, 'success');
       
       // Call onLogout callback to navigate to OTP screen and clear all data
       if (onLogout) {
@@ -378,7 +365,6 @@ const MoreScreen = ({ partnerStatus, onLogout, navigation, onNavigate, configDat
       
       // Get dynamic success message
       const successMessage = getUILabel('logout_success_message', 'Logged out successfully');
-      showToast(successMessage, 'success');
       
       // Call onLogout callback even if there's an error
       if (onLogout) {

@@ -49,8 +49,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
   console.log('🚀 [MenuScreen] Component rendered');
   console.log('🚀 [MenuScreen] Props:', { partnerStatus, hasOnNavigateToOrders: !!onNavigateToOrders, resetNavigationTrigger });
   
-  const { showToast } = useToast();
-  const dispatch = useDispatch();
+    const dispatch = useDispatch();
   
   // Get data from Redux store
   const {
@@ -480,7 +479,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         });
         if (page === 1) {
   // console.log('❌ [MenuScreen] Showing error toast for page 1');
-          showToast(data.message || 'Failed to fetch catalog', 'error');
         } else {
   // console.log('⚠️ [MenuScreen] Not showing toast for page > 1');
         }
@@ -490,7 +488,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       console.error('❌ [MenuScreen] Error stack:', error.stack);
       if (page === 1) {
   // console.log('❌ [MenuScreen] Showing error toast for page 1');
-        showToast('Failed to fetch catalog', 'error');
       } else {
   // console.log('⚠️ [MenuScreen] Not showing toast for page > 1');
       }
@@ -501,7 +498,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       dispatch(setRefreshing(false));
   // console.log('✅ [MenuScreen] Loading states reset');
     }
-  }, [showToast, dispatch, lastFetchedPage]);
+  }, [dispatch, lastFetchedPage]);
 
   // Load next page - increments counter and fetches new page
   const loadNextPage = useCallback(async () => {
@@ -1376,7 +1373,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         
         const errorMessage = data.message || 'Failed to update item status';
         console.error('❌ [MenuScreen] Failed to update item status:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [MenuScreen] Exception caught, reverting optimistic update');
@@ -1390,7 +1386,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       
       console.error('❌ [MenuScreen] Error updating item status:', error);
       console.error('❌ [MenuScreen] Error stack:', error.stack);
-      showToast('Failed to update item status', 'error');
     } finally {
   // console.log('🏁 [MenuScreen] Toggle finally - removing item from togglingItems set');
       // Remove item from toggling set
@@ -1402,7 +1397,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       });
   // console.log('✅ [MenuScreen] toggleItemAvailability completed');
     }
-  }, [categories, togglingItems, dispatch, showToast]);
+  }, [categories, togglingItems, dispatch]);
 
   const handleCreateCategory = () => {
   // console.log('➕ [MenuScreen] handleCreateCategory called');
@@ -1460,7 +1455,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         data = JSON.parse(responseText);
       } catch (parseError) {
         console.error('❌ [MenuScreen] Failed to parse response:', parseError);
-        showToast('Invalid response from server', 'error');
         return;
       }
       
@@ -1479,7 +1473,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       
       if (isSuccess) {
   // console.log(`✅ [MenuScreen] Category ${isEditing ? 'updated' : 'created'} successfully`);
-        showToast(`Category ${isEditing ? 'updated' : 'created'} successfully`, 'success');
         
         // Reset editing state
   // console.log('💾 [MenuScreen] Resetting editing category state');
@@ -1501,11 +1494,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         const errorStatus = data.status || response.status;
         console.error(`❌ [MenuScreen] Failed to ${isEditing ? 'update' : 'create'} category:`, errorMessage);
         console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error(`❌ [MenuScreen] Error ${editingCategory ? 'updating' : 'creating'} category:`, error);
-      showToast(`Failed to ${editingCategory ? 'update' : 'create'} category`, 'error');
     }
   };
 
@@ -1539,7 +1530,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
     
     if (!selectedCategoryId && !isEditing) {
       console.error('❌ [MenuScreen] Category not selected');
-      showToast('Category not selected', 'error');
       return;
     }
   // console.log('✅ [MenuScreen] Category validation passed');
@@ -1687,7 +1677,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       
       if (isSuccess) {
   // console.log(`✅ [MenuScreen] Item ${isEditing ? 'updated' : 'created'} successfully`);
-        showToast(`Item ${isEditing ? 'updated' : 'created'} successfully`, 'success');
         
         // If we got a new item ID from creation, store it
         const savedItemId = data.data?.id || selectedItemId;
@@ -1723,11 +1712,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         // Handle error responses (409, 400, etc.)
         const errorMessage = data.message || data.error || `Failed to ${isEditing ? 'update' : 'create'} item`;
         console.error(`❌ [MenuScreen] Failed to ${isEditing ? 'update' : 'create'} item:`, errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error(`❌ [MenuScreen] Error ${editingItem ? 'updating' : 'creating'} item:`, error);
-      showToast(`Failed to ${editingItem ? 'update' : 'create'} item`, 'error');
     } finally {
       if (!shouldNavigateToVariants) {
         setSelectedCategoryId(null);
@@ -1753,7 +1740,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
 
   const handleSaveSubCategory = async (subCategoryData) => {
     if (!selectedCategoryId) {
-      showToast('Category not selected', 'error');
       return;
     }
 
@@ -1795,7 +1781,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       const isSuccess = response.ok && data.code === successCode && data.status === 'success';
       
       if (isSuccess) {
-        showToast(`Sub-category ${isEditing ? 'updated' : 'created'} successfully`, 'success');
         
         // Reset editing state
         setEditingSubCategory(null);
@@ -1813,11 +1798,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         const errorStatus = data.status || response.status;
         console.error(`❌ [MenuScreen] Failed to ${isEditing ? 'update' : 'create'} sub-category:`, errorMessage);
         console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error(`❌ [MenuScreen] Error ${editingSubCategory ? 'updating' : 'creating'} sub-category:`, error);
-      showToast(`Failed to ${editingSubCategory ? 'update' : 'create'} sub-category`, 'error');
     } finally {
       setSelectedCategoryId(null);
     }
@@ -1867,7 +1850,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
                 const isSuccess = response.ok && data.code === 200 && data.status === 'success';
                 
                 if (isSuccess) {
-                  showToast('Sub-category deleted successfully', 'success');
                   setOpenSubCategoryMenuId(null);
                   // Refresh categories list (reset pagination)
                   setCurrentPage(1);
@@ -1879,12 +1861,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
                   const errorStatus = data.status || response.status;
                   console.error('❌ [MenuScreen] Failed to delete sub-category:', errorMessage);
                   console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
-                  showToast(errorMessage, 'error');
                   setOpenSubCategoryMenuId(null);
                 }
               } catch (error) {
                 console.error('❌ [MenuScreen] Error deleting sub-category:', error);
-                showToast('Failed to delete sub-category', 'error');
                 setOpenSubCategoryMenuId(null);
               }
             },
@@ -1929,7 +1909,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       }
       
       if (result.errorMessage) {
-        showToast(result.errorMessage, 'error');
         setSelectedCategoryId(null);
         setSelectedItemId(null);
         return;
@@ -1945,11 +1924,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
           updates: { image: imageUri }
         }));
         
-        showToast('Photo selected from gallery', 'success');
       }
     } catch (error) {
       console.error('Error selecting from gallery:', error);
-      showToast('Failed to select image from gallery', 'error');
     } finally {
       // Reset state
       setSelectedCategoryId(null);
@@ -1977,7 +1954,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       }
       
       if (result.errorMessage) {
-        showToast(result.errorMessage, 'error');
         setSelectedCategoryId(null);
         setSelectedItemId(null);
         return;
@@ -1993,11 +1969,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
           updates: { image: imageUri }
         }));
         
-        showToast('Photo captured successfully', 'success');
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      showToast('Failed to take photo', 'error');
     } finally {
       // Reset state
       setSelectedCategoryId(null);
@@ -2110,7 +2084,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
                 const isSuccess = response.ok && data.code === 200 && data.status === 'success';
                 
                 if (isSuccess) {
-                  showToast('Category deleted successfully', 'success');
                   setOpenCategoryMenuId(null);
                   // Refresh categories list (reset pagination)
                   setCurrentPage(1);
@@ -2122,12 +2095,10 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
                   const errorStatus = data.status || response.status;
                   console.error('❌ [MenuScreen] Failed to delete category:', errorMessage);
                   console.error(`❌ [MenuScreen] Response Status: ${response.status}, Error Status: ${errorStatus}`);
-                  showToast(errorMessage, 'error');
                   setOpenCategoryMenuId(null);
                 }
               } catch (error) {
                 console.error('❌ [MenuScreen] Error deleting category:', error);
-                showToast('Failed to delete category', 'error');
                 setOpenCategoryMenuId(null);
               }
             },
@@ -2156,7 +2127,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
   // console.log('📥 [MenuScreen] Create Add-on API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && data.code === 201 && data.status === 'success') {
-        showToast('Add-on created successfully', 'success');
         
         // Trigger refresh of add-ons list
         setAddonsRefreshTrigger(prev => prev + 1);
@@ -2164,11 +2134,9 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
         // Handle error responses (409, 400, etc.)
         const errorMessage = data.message || data.error || 'Failed to create add-on';
         console.error('❌ [MenuScreen] Failed to create add-on:', errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (error) {
       console.error('❌ [MenuScreen] Error creating add-on:', error);
-      showToast('Failed to create add-on', 'error');
     }
   };
 
@@ -2180,7 +2148,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
     
     if (!selectedItemId) {
       console.error('❌ [MenuScreen] Item ID is missing');
-      showToast('Item ID is missing', 'error');
       return;
     }
 
@@ -2239,7 +2206,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       
       // Show success message
   // console.log('📷 [MenuScreen] Showing success toast');
-      showToast('Item images uploaded successfully', 'success');
       
       // Refresh categories in background to ensure sync with backend
       // Add a delay to ensure backend has processed the uploads and optimistic update is visible
@@ -2255,7 +2221,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
     } catch (error) {
       console.error('❌ [MenuScreen] Error saving item image and timing:', error);
       console.error('❌ [MenuScreen] Error stack:', error.stack);
-      showToast('Failed to save item images and timing', 'error');
     }
   };
 
@@ -2390,7 +2355,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
   // console.log('💾 [MenuScreen] AddOnsSelectionScreen onSave called');
   // console.log('💾 [MenuScreen] Updated item data:', updatedItemData);
           // Add-ons linked successfully
-          showToast('Add-ons linked successfully', 'success');
           // Update the item data so AddAddonsScreen can show the updated linked add-ons
           if (updatedItemData) {
   // console.log('📱 [MenuScreen] AddOnsSelectionScreen onSave - updating item data');
@@ -2482,20 +2446,36 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
           }
         }}
         onItemDataUpdate={async (updatedItemData) => {
-  // console.log('🔄 [MenuScreen] AddAddonsScreen onItemDataUpdate called');
-  // console.log('🔄 [MenuScreen] Updated item data:', updatedItemData);
+          console.log('🔄 [MenuScreen] AddAddonsScreen onItemDataUpdate called');
+          console.log('🔄 [MenuScreen] Updated item data:', updatedItemData);
           // Update item data when add-ons are linked
           if (updatedItemData) {
-  // console.log('📱 [MenuScreen] onItemDataUpdate called with updated item data');
-  // console.log('📱 [MenuScreen] Updated item add_ons:', updatedItemData.add_ons ? JSON.stringify(updatedItemData.add_ons, null, 2) : 'none');
+            console.log('📱 [MenuScreen] onItemDataUpdate called with updated item data');
+            console.log('📱 [MenuScreen] Updated item add_ons count:', updatedItemData.add_ons ? updatedItemData.add_ons.length : 0);
+            
+            // IMPORTANT: Update both editingItem and pendingItemData with the latest data
             setEditingItem(updatedItemData);
             setPendingItemData(updatedItemData);
+            
             // Refresh categories in background to keep them in sync
-  // console.log('🔄 [MenuScreen] Refreshing categories');
+            console.log('🔄 [MenuScreen] Refreshing categories');
             setCurrentPage(1);
             setHasNext(true);
             await fetchCategories(1, false);
-  // console.log('✅ [MenuScreen] Categories refreshed');
+            console.log('✅ [MenuScreen] Categories refreshed');
+            
+            // CRITICAL: After categories refresh, re-set the pendingItemData with fresh data from categories
+            // This ensures that even if user navigates away and comes back, they'll see the latest data
+            const category = categories.find(c => c.id === updatedItemData.category_id || c.id === selectedCategoryId);
+            if (category) {
+              const freshItem = category.items.find(i => i.id === updatedItemData.id);
+              if (freshItem) {
+                console.log('🔄 [MenuScreen] Updating pendingItemData with fresh data from categories');
+                console.log('🔄 [MenuScreen] Fresh item add_ons count:', freshItem.add_ons ? freshItem.add_ons.length : 0);
+                setPendingItemData(freshItem);
+                setEditingItem(freshItem);
+              }
+            }
           } else {
             console.warn('⚠️ [MenuScreen] onItemDataUpdate called with no data');
           }
@@ -2514,7 +2494,6 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
   // console.log('💾 [MenuScreen] AddAddonsScreen onSave called');
   // console.log('💾 [MenuScreen] Addon data saved:', addonData);
           // TODO: Save addon data to backend
-          showToast('Add-on configuration saved successfully', 'success');
           // Refresh categories to get updated item with add-ons (reset pagination)
   // console.log('💾 [MenuScreen] Refreshing categories');
           setCurrentPage(1);

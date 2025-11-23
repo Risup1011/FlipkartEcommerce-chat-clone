@@ -16,6 +16,7 @@ export { default as NewOrdersScreen } from './NewOrdersScreen';
 export { default as OrderDetailsScreen } from './OrderDetailsScreen';
 export { default as MenuScreen } from './MenuScreen';
 export { default as MoreScreen } from './MoreScreen';
+export { default as FinanceScreen } from './FinanceScreen';
 export { default as ItemDetailsScreen } from './ItemDetailsScreen';
 export { default as ItemImageTimingScreen } from './ItemImageTimingScreen';
 export { default as ItemVariantsAndAddonsScreen } from './ItemVariantsAndAddonsScreen';

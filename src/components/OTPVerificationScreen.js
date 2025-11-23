@@ -23,8 +23,7 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [screenData, setScreenData] = useState(null); // Store backend screen configuration
-  const { showToast } = useToast();
-
+  
   // Fetch screen configuration from backend (non-blocking)
   useEffect(() => {
     // Don't block render - fetch in background
@@ -200,7 +199,6 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
         
         // Show success message (use backend message or API response message)
         const successMessage = screenData?.messages?.success?.otp_sent || data.message || 'OTP sent successfully';
-        showToast(successMessage, 'success');
         
         // Try to find OTP in various possible locations in the response
         // Only check string values that look like OTPs (4 digits), not status codes
@@ -233,7 +231,6 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
         console.error('❌ [OTPVerificationScreen] Error Response:', JSON.stringify(data, null, 2));
         const errorMessage = data.message || screenData?.messages?.error?.otp_send_failed || 'Failed to send OTP. Please try again.';
         setError(errorMessage);
-        showToast(errorMessage, 'error');
       }
     } catch (err) {
       // Handle network or other errors
@@ -241,11 +238,10 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
       console.error('❌ [OTPVerificationScreen] Error Details:', err.message);
       const errorMessage = screenData?.messages?.error?.network_error || 'Network error. Please check your connection and try again.';
       setError(errorMessage);
-      showToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
-  }, [validatePhoneNumber, phoneNumber, countryCode, screenData, showToast, onNavigateToVerification]);
+  }, [validatePhoneNumber, phoneNumber, countryCode, screenData, onNavigateToVerification]);
 
   return (
     <SafeAreaView style={styles.container}>

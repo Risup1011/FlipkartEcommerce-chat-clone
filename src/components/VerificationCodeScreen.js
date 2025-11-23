@@ -30,8 +30,7 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
   const [screenData, setScreenData] = useState(null); // Store backend screen configuration
   const [loadingScreenData, setLoadingScreenData] = useState(true); // Loading state for screen config
   const inputRefs = useRef([]);
-  const { showToast } = useToast();
-
+  
   // Fetch screen configuration from backend
   useEffect(() => {
     fetchScreenConfig();
@@ -208,7 +207,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
     // Bypass for mock OTP (development/testing only)
     if (otpCode === MOCK_OTP_CODE) {
       
-      showToast(`OTP verified successfully (Mock - ${MOCK_OTP_PARTNER_STATUS})`, 'success');
       
       // Use partner_status from config file
       const mockPartnerStatus = MOCK_OTP_PARTNER_STATUS;
@@ -223,7 +221,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
 
     if (!otpData || !otpData.otp_id) {
       const errorMsg = screenData?.messages?.error?.otp_session_expired || 'OTP session expired. Please request a new OTP.';
-      showToast(errorMsg, 'error');
       return;
     }
 
@@ -289,7 +286,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         
         // Show success message (use backend message)
         const successMessage = screenData?.messages?.success?.otp_verified || 'OTP verified successfully';
-        showToast(successMessage, 'success');
         
         // Pass partner_status, partner_id, onboarding_id, access_token, and refresh_token to onConfirm callback
         if (onConfirm) {
@@ -316,7 +312,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
           // Case 1: Invalid OTP
           const invalidOtpMsg = screenData?.messages?.error?.invalid_otp || 'Invalid OTP. Please try again.';
           setError(invalidOtpMsg);
-          showToast(invalidOtpMsg, 'error');
           // Clear the codes to allow re-entry
           setCodes(['', '', '', '']);
           inputRefs.current[0]?.focus();
@@ -339,17 +334,14 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
               },
             ]
           );
-          showToast(expiredToast, 'error');
         } else if (response.status === 429 && errorCode === 'OTP_ATTEMPTS_EXCEEDED') {
           // Case 3: Maximum attempts exceeded
           setError(errorMessage);
-          showToast(errorMessage, 'error');
           // Disable the confirm button temporarily
           setCodes(['', '', '', '']);
         } else {
           // Other errors
           setError(errorMessage);
-          showToast(errorMessage, 'error');
         }
       }
     } catch (err) {
@@ -361,7 +353,6 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
       console.error('❌ [VerificationCodeScreen] ========================================');
       const errorMessage = screenData?.messages?.error?.network_error || 'Network error. Please check your connection and try again.';
       setError(errorMessage);
-      showToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -377,13 +368,11 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
         setCodes(['', '', '', '']);
         setError('');
         const resendSuccessMsg = screenData?.messages?.success?.otp_resent || 'OTP sent successfully';
-        showToast(resendSuccessMsg, 'success');
         // Focus on first input
         inputRefs.current[0]?.focus();
         // Timer will be reset by the useEffect when new otpData is received
       } catch (err) {
         const resendErrorMsg = screenData?.messages?.error?.otp_resend_failed || 'Failed to resend OTP. Please try again.';
-        showToast(resendErrorMsg, 'error');
       }
     }
   };
