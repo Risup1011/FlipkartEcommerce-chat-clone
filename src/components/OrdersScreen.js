@@ -16,6 +16,7 @@ import {
   Vibration,
   Dimensions,
   Linking,
+  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -27,6 +28,7 @@ import FinanceScreen from './FinanceScreen';
 import { useToast } from './ToastContext';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL, RIDER_API_BASE_URL, DEFAULT_RIDER_ID } from '../config';
+import PowerToggle from './PowerToggle';
 
 // Try to import react-native-sound, but handle gracefully if not available
 let Sound = null;
@@ -38,6 +40,7 @@ try {
 
 const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceived, onLogout, initialTab, initialBottomTab, onNavigate }) => {
     const [isOnline, setIsOnline] = useState(true);
+  const [isTogglingOnline, setIsTogglingOnline] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab || 'preparing');
   const [activeBottomTab, setActiveBottomTab] = useState(initialBottomTab || 'orders');
   const [orderCount, setOrderCount] = useState(0);
@@ -68,16 +71,53 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   const [showTimePickerModal, setShowTimePickerModal] = useState(false);
   const [selectedOrderForTimeUpdate, setSelectedOrderForTimeUpdate] = useState(null);
   const [preparationTime, setPreparationTime] = useState(15);
-  const [isMarkingReady, setIsMarkingReady] = useState(false);
+  const [loadingOrderIds, setLoadingOrderIds] = useState(new Set());
   const [isUpdatingTime, setIsUpdatingTime] = useState(false);
-  const [isMarkingPickedUp, setIsMarkingPickedUp] = useState(false);
-  const [isMarkingDelivered, setIsMarkingDelivered] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoicePdfUrl, setInvoicePdfUrl] = useState(null);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
   const [useDirectPdf, setUseDirectPdf] = useState(false);
+
+  // Handle online toggle with API call
+  const handleOnlineToggle = async (value) => {
+    try {
+      setIsTogglingOnline(true);
+      const url = `${API_BASE_URL}v1/settings/order-receiving`;
+      
+      const requestBody = {
+        is_accepting: value,
+      };
+      
+      const response = await fetchWithAuth(url, {
+        method: 'PATCH',
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.code === 200 && data.status === 'success') {
+        setIsOnline(value);
+        
+        // Update configData with new status
+        setConfigData(prev => ({
+          ...prev,
+          partner_info: {
+            ...prev?.partner_info,
+            online_status: value ? 'Online' : 'Offline',
+            closing_info: data.data?.closing_info || prev?.partner_info?.closing_info,
+          },
+        }));
+      } else {
+        console.error('❌ [OrdersScreen] Failed to update online status:', data.message);
+      }
+    } catch (error) {
+      console.error('❌ [OrdersScreen] Error toggling online status:', error);
+    } finally {
+      setIsTogglingOnline(false);
+    }
+  };
 
   // Update activeBottomTab when initialBottomTab prop changes
   useEffect(() => {
@@ -811,10 +851,10 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       // Frontend uses: preparing, ready, pickedUp, pastOrders
       // Note: NEW orders are accessed via green banner only, not in tabs
       const tabs = [
-        { id: 'preparing', label: labels.preparing || 'Preparing' },
-        { id: 'ready', label: labels.ready || 'Ready' },
-        { id: 'pickedUp', label: labels.picked_up || 'Picked Up' },
-        { id: 'pastOrders', label: labels.past_order || 'Past Orders' },
+        { id: 'preparing', label: labels.preparing || 'Preparing', icon: images.preparing },
+        { id: 'ready', label: labels.ready || 'Ready', icon: images.ready },
+        { id: 'pickedUp', label: labels.picked_up || 'Picked Up', icon: images.pickedUp },
+        { id: 'pastOrders', label: labels.past_order || 'Past Orders', icon: images.pastOrders },
       ];
       
       console.log('📋 [OrdersScreen] Generated tabs from backend:', tabs.map(t => `${t.id}: "${t.label}"`).join(', '));
@@ -836,10 +876,10 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     console.log('⚠️ [OrdersScreen] Config not loaded yet, using FALLBACK tabs');
     // Note: NEW orders are accessed via green banner only, not in tabs
     const fallbackTabs = [
-      { id: 'preparing', label: 'Preparing' },
-      { id: 'ready', label: 'Ready' },
-      { id: 'pickedUp', label: 'Picked Up' },
-      { id: 'pastOrders', label: 'Past Orders' },
+      { id: 'preparing', label: 'Preparing', icon: images.preparing },
+      { id: 'ready', label: 'Ready', icon: images.ready },
+      { id: 'pickedUp', label: 'Picked Up', icon: images.pickedUp },
+      { id: 'pastOrders', label: 'Past Orders', icon: images.pastOrders },
     ];
     
     return fallbackTabs;
@@ -1158,7 +1198,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       return;
     }
 
-    setIsMarkingReady(true);
+    setLoadingOrderIds(prev => new Set(prev).add(order.id));
     try {
       const url = `${API_BASE_URL}v1/orders/${order.id}/mark-ready`;
       console.log(`📡 [OrdersScreen] Marking order as ready: ${order.id}`);
@@ -1205,7 +1245,11 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     } catch (error) {
       console.error(`❌ [OrdersScreen] Error marking order as ready:`, error);
     } finally {
-      setIsMarkingReady(false);
+      setLoadingOrderIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(order.id);
+        return newSet;
+      });
     }
   };
 
@@ -1292,7 +1336,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       return;
     }
 
-    setIsMarkingPickedUp(true);
+    setLoadingOrderIds(prev => new Set(prev).add(order.id));
     try {
       console.log('📡 [OrdersScreen] ========================================');
       console.log('📡 [OrdersScreen] MARKING ORDER AS PICKED UP');
@@ -1379,7 +1423,11 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.error(`❌ [OrdersScreen] Error Stack:`, error?.stack);
       
     } finally {
-      setIsMarkingPickedUp(false);
+      setLoadingOrderIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(order.id);
+        return newSet;
+      });
     }
   };
 
@@ -1389,7 +1437,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       return;
     }
 
-    setIsMarkingDelivered(true);
+    setLoadingOrderIds(prev => new Set(prev).add(order.id));
     try {
       console.log('📡 [OrdersScreen] ========================================');
       console.log('📡 [OrdersScreen] MARKING ORDER AS DELIVERED');
@@ -1476,7 +1524,11 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.error(`❌ [OrdersScreen] Error Stack:`, error?.stack);
       
     } finally {
-      setIsMarkingDelivered(false);
+      setLoadingOrderIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(order.id);
+        return newSet;
+      });
     }
   };
 
@@ -1735,28 +1787,15 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         {/* Dashed Line */}
         <View style={styles.dashedLine} />
         
-        {/* DE Assignment Section */}
-        <View style={styles.deAssignmentSectionNew}>
-          <Text style={styles.deAssignmentTextNew}>DE will be assigned as prep time</Text>
-          <Image
-            source={icons.de}
-            style={styles.deIconNew}
-            resizeMode="contain"
-          />
-        </View>
-        
-        {/* Dashed Line */}
-        <View style={styles.dashedLine} />
-        
         {/* Bottom Actions: Mark Ready + Add Time */}
         <View style={styles.preparingActionsNew}>
           <TouchableOpacity
-            style={[styles.markReadyButtonNew, isMarkingReady && styles.markReadyButtonDisabledNew]}
+            style={[styles.markReadyButtonNew, loadingOrderIds.has(order.id) && styles.markReadyButtonDisabledNew]}
             onPress={() => handleMarkOrderReady(order)}
             activeOpacity={0.7}
-            disabled={isMarkingReady}
+            disabled={loadingOrderIds.has(order.id)}
           >
-            {isMarkingReady ? (
+            {loadingOrderIds.has(order.id) ? (
               <ActivityIndicator size="small" color="#8B4513" />
             ) : (
               <PreparingCountdown estimatedReadyTime={order.estimatedReadyTime} />
@@ -1770,6 +1809,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             <Text style={styles.addTimeButtonText}>+</Text>
           </TouchableOpacity>
         </View>
+        <TornEdge />
       </View>
     );
   };
@@ -1809,12 +1849,12 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         {/* Bottom Actions: Food Ready + Track Delivery */}
         <View style={styles.readyActionsNew}>
           <TouchableOpacity
-            style={[styles.foodReadyButton, isMarkingPickedUp && styles.foodReadyButtonDisabled]}
+            style={[styles.foodReadyButton, loadingOrderIds.has(order.id) && styles.foodReadyButtonDisabled]}
             onPress={() => handleMarkOrderPickedUp(order)}
             activeOpacity={0.7}
-            disabled={isMarkingPickedUp}
+            disabled={loadingOrderIds.has(order.id)}
           >
-            {isMarkingPickedUp ? (
+            {loadingOrderIds.has(order.id) ? (
               <ActivityIndicator size="small" color="#666666" />
             ) : (
               <Text style={styles.foodReadyButtonText} numberOfLines={1}>Food Ready</Text>
@@ -1830,6 +1870,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             <Text style={styles.trackDeliveryButtonTextReady} numberOfLines={1}>Track Delivery</Text>
           </TouchableOpacity>
         </View>
+        <TornEdge />
       </View>
     );
   };
@@ -1992,6 +2033,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
               </View>
             </View>
           </View>
+          <TornEdge />
         </View>
       );
     }
@@ -2066,12 +2108,12 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         {/* Bottom Actions: DE Arriving + Track Delivery */}
         <View style={styles.pickedUpActionsNew}>
           <TouchableOpacity
-            style={[styles.deArrivingButton, isMarkingDelivered && styles.deArrivingButtonDisabled]}
+            style={[styles.deArrivingButton, loadingOrderIds.has(order.id) && styles.deArrivingButtonDisabled]}
             onPress={() => handleMarkOrderDelivered(order)}
             activeOpacity={0.7}
-            disabled={isMarkingDelivered}
+            disabled={loadingOrderIds.has(order.id)}
           >
-            {isMarkingDelivered ? (
+            {loadingOrderIds.has(order.id) ? (
               <ActivityIndicator size="small" color="#666666" />
             ) : (
               <Text style={styles.deArrivingButtonText} numberOfLines={1}>
@@ -2089,6 +2131,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             <Text style={styles.trackDeliveryButtonTextFilled} numberOfLines={1}>Track Delivery</Text>
           </TouchableOpacity>
         </View>
+        <TornEdge />
       </View>
     );
   };
@@ -2134,6 +2177,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             </View>
           )}
         </View>
+        <TornEdge />
       </View>
     );
   };
@@ -2269,13 +2313,13 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
               onPress={() => handleBottomTabPress(tab.id)}
               activeOpacity={0.7}
             >
-              <Image
+              <AnimatedBottomNavIcon
                 source={tab.icon}
+                isActive={activeBottomTab === tab.id}
                 style={[
                   styles.bottomNavIcon,
                   activeBottomTab === tab.id && styles.bottomNavIconActive,
                 ]}
-                resizeMode="contain"
               />
             </TouchableOpacity>
           ))}
@@ -2314,13 +2358,13 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
               onPress={() => handleBottomTabPress(tab.id)}
               activeOpacity={0.7}
             >
-              <Image
+              <AnimatedBottomNavIcon
                 source={tab.icon}
+                isActive={activeBottomTab === tab.id}
                 style={[
                   styles.bottomNavIcon,
                   activeBottomTab === tab.id && styles.bottomNavIconActive,
                 ]}
-                resizeMode="contain"
               />
             </TouchableOpacity>
           ))}
@@ -2347,13 +2391,13 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
               onPress={() => handleBottomTabPress(tab.id)}
               activeOpacity={0.7}
             >
-              <Image
+              <AnimatedBottomNavIcon
                 source={tab.icon}
+                isActive={activeBottomTab === tab.id}
                 style={[
                   styles.bottomNavIcon,
                   activeBottomTab === tab.id && styles.bottomNavIconActive,
                 ]}
-                resizeMode="contain"
               />
             </TouchableOpacity>
           ))}
@@ -2369,18 +2413,34 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         <View style={styles.headerLeft}>
           <View style={styles.paperPlaneIcon}>
             <Image
-              source={icons.cooking}
+              source={images.headerLogo}
               style={styles.cookingIcon}
               resizeMode="contain"
             />
           </View>
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.restaurantName}>
-              {configData?.partner_info?.business_name || ''}
-            </Text>
+          <View style={styles.headerContent}>
+            <View style={styles.headerTopRow}>
+              <Text style={styles.restaurantName}>
+                {configData?.partner_info?.business_name || ''}
+              </Text>
+              {isTogglingOnline ? (
+                <ActivityIndicator size="small" color="#FF6E1A" style={styles.headerToggleLoader} />
+              ) : (
+                <View style={styles.smallToggleWrapper}>
+                  <PowerToggle
+                    value={isOnline}
+                    onValueChange={handleOnlineToggle}
+                    disabled={isTogglingOnline}
+                  />
+                </View>
+              )}
+            </View>
             {configData?.partner_info && (
               <View style={styles.statusContainer}>
-                <Text style={styles.onlineText}>
+                <Text style={[
+                  styles.onlineText,
+                  configData.partner_info.online_status?.toLowerCase() === 'offline' && styles.offlineText
+                ]}>
                   {configData.partner_info.online_status || ''}
                 </Text>
                 {configData.partner_info.online_status && configData.partner_info.closing_info && (
@@ -2395,18 +2455,9 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             )}
           </View>
         </View>
-        <View style={styles.headerRight}>
-          {/* <TouchableOpacity style={styles.searchButton} activeOpacity={0.7}>
-            <Image
-              source={icons.search}
-              style={styles.searchIcon}
-              resizeMode="contain"
-            />
-          </TouchableOpacity> */}
-        </View>
       </View>
 
-      {/* Partner Status Banner - Show when UNDER_REVIEW */}
+      {/* Partner Status Banner */}
       {partnerStatus === 'UNDER_REVIEW' && (
         <View style={styles.statusBanner}>
           <Text style={styles.statusBannerText}>
@@ -2414,22 +2465,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
           </Text>
         </View>
       )}
-
-      {/* Online Status Bar */}
-      <View style={[styles.onlineBar, isOnline ? styles.onlineBarActive : styles.onlineBarInactive]}>
-        <View style={styles.onlineBarContent}>
-          <Switch
-            value={isOnline}
-            onValueChange={setIsOnline}
-            trackColor={{ false: '#767577', true: '#FFFFFF' }}
-            thumbColor="#000000"
-            ios_backgroundColor="#767577"
-          />
-          <Text style={styles.onlineBarText}>
-            {isOnline ? 'You are online' : 'You are offline'}
-          </Text>
-        </View>
-      </View>
 
       {/* Order Status Tabs */}
       <View style={styles.tabsContainer}>
@@ -2444,6 +2479,12 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
               onPress={() => handleTabPress(tab.id)}
               activeOpacity={0.7}
             >
+              {tab.icon && (
+                <AnimatedTabIcon
+                  source={tab.icon}
+                  isActive={activeTab === tab.id}
+                />
+              )}
               <Text
                 style={[
                   styles.tabText,
@@ -2660,13 +2701,13 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             onPress={() => handleBottomTabPress(tab.id)}
             activeOpacity={0.7}
           >
-            <Image
+            <AnimatedBottomNavIcon
               source={tab.icon}
+              isActive={activeBottomTab === tab.id}
               style={[
                 styles.bottomNavIcon,
                 activeBottomTab === tab.id && styles.bottomNavIconActive,
               ]}
-              resizeMode="contain"
             />
           </TouchableOpacity>
         ))}
@@ -2992,6 +3033,182 @@ const getResponsivePadding = (basePadding) => {
 const RESPONSIVE_TAB_FONT_SIZE = getResponsiveFontSize(13);
 const RESPONSIVE_TAB_PADDING = getResponsivePadding(12);
 
+// Animated Tab Icon Component (for order status tabs)
+const AnimatedTabIcon = ({ source, isActive }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isActive) {
+      // Bounce animation when active
+      Animated.sequence([
+        Animated.spring(scaleAnim, {
+          toValue: 1.2,
+          friction: 3,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 3,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      
+      // Subtle rotation
+      Animated.sequence([
+        Animated.timing(rotateAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(rotateAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [isActive]);
+
+  const rotate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '10deg'],
+  });
+
+  return (
+    <Animated.Image
+      source={source}
+      style={[
+        styles.tabIcon,
+        {
+          transform: [
+            { scale: scaleAnim },
+            { rotate: rotate },
+          ],
+        },
+      ]}
+      resizeMode="contain"
+    />
+  );
+};
+
+// Animated Bottom Nav Icon Component
+const AnimatedBottomNavIcon = ({ source, isActive, style }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isActive) {
+      // Scale and bounce animation
+      Animated.parallel([
+        Animated.sequence([
+          Animated.spring(scaleAnim, {
+            toValue: 1.3,
+            friction: 3,
+            tension: 40,
+            useNativeDriver: true,
+          }),
+          Animated.spring(scaleAnim, {
+            toValue: 1.1,
+            friction: 3,
+            tension: 40,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(bounceAnim, {
+            toValue: -8,
+            duration: 150,
+            useNativeDriver: true,
+          }),
+          Animated.spring(bounceAnim, {
+            toValue: 0,
+            friction: 3,
+            tension: 40,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(bounceAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isActive]);
+
+  return (
+    <Animated.Image
+      source={source}
+      style={[
+        style,
+        {
+          transform: [
+            { scale: scaleAnim },
+            { translateY: bounceAnim },
+          ],
+        },
+      ]}
+      resizeMode="contain"
+    />
+  );
+};
+
+// Torn Edge Component
+const TornEdge = () => {
+  const numTriangles = 20;
+  const triangles = [];
+  
+  for (let i = 0; i < numTriangles; i++) {
+    triangles.push(
+      <View
+        key={i}
+        style={{
+          width: 0,
+          height: 0,
+          backgroundColor: 'transparent',
+          borderStyle: 'solid',
+          borderLeftWidth: SCREEN_WIDTH / numTriangles / 2,
+          borderRightWidth: SCREEN_WIDTH / numTriangles / 2,
+          borderBottomWidth: 8,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderBottomColor: '#F5F5F5',
+        }}
+      />
+    );
+  }
+  
+  return (
+    <View style={{
+      flexDirection: 'row',
+      position: 'absolute',
+      bottom: -8,
+      left: 0,
+      right: 0,
+      backgroundColor: '#FFFFFF',
+    }}>
+      {triangles}
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
   fullScreenContainer: {
     flex: 1,
@@ -3003,7 +3220,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F5F5',
   },
   header: {
     flexDirection: 'row',
@@ -3035,11 +3252,20 @@ const styles = StyleSheet.create({
   headerTextContainer: {
     flex: 1,
   },
+  headerContent: {
+    flex: 1,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   restaurantName: {
     fontFamily: Poppins.semiBold,
     fontSize: 18,
     color: '#000000',
-    marginBottom: 4,
+    flex: 1,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -3050,6 +3276,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4CAF50',
     marginRight: 4,
+  },
+  offlineText: {
+    color: '#EF5350',
   },
   statusDot: {
     fontFamily: Poppins.regular,
@@ -3062,9 +3291,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666666',
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  headerToggleLoader: {
+    marginLeft: 8,
+  },
+  smallToggleWrapper: {
+    transform: [{ scale: 0.6 }],
+    marginLeft: 12,
   },
   searchButton: {
     padding: 8,
@@ -3118,6 +3350,11 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     // Active tab styling
+  },
+  tabIcon: {
+    width: 24,
+    height: 24,
+    marginBottom: 4,
   },
   tabText: {
     fontFamily: Poppins.regular,
@@ -3193,9 +3430,12 @@ const styles = StyleSheet.create({
   },
   orderCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    padding: 10,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -3204,12 +3444,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    overflow: 'hidden',
   },
   orderCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   orderCardHeaderLeft: {
     flex: 1,
@@ -3448,8 +3689,12 @@ const styles = StyleSheet.create({
   // PREPARING Card Styles (New Design - matching other cards)
   preparingCardNew: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     padding: 16,
+    paddingBottom: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E3F2FD',
@@ -3461,6 +3706,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: 'relative',
+    overflow: 'visible',
   },
   preparingCardHeader: {
     flexDirection: 'row',
@@ -3493,6 +3740,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#000000',
     marginBottom: 8,
+    textAlign: 'left',
   },
   preparingOrderInfoNew: {
     flexDirection: 'row',
@@ -3701,8 +3949,12 @@ const styles = StyleSheet.create({
   // READY Card Styles (New Design - matching picked up and delivered cards)
   readyCardNew: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     padding: 16,
+    paddingBottom: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E3F2FD',
@@ -3714,6 +3966,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: 'relative',
+    overflow: 'visible',
   },
   readyCardHeader: {
     flexDirection: 'row',
@@ -3975,8 +4229,12 @@ const styles = StyleSheet.create({
   // PICKED_UP Card Styles (New Design - matching delivered card)
   pickedUpCardNew: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     padding: 16,
+    paddingBottom: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E3F2FD',
@@ -3988,6 +4246,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: 'relative',
+    overflow: 'visible',
   },
   pickedUpCardHeader: {
     flexDirection: 'row',
@@ -4115,8 +4375,12 @@ const styles = StyleSheet.create({
   // DELIVERED Card Styles (New Design)
   deliveredCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     padding: 16,
+    paddingBottom: 20,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#E3F2FD',
@@ -4128,6 +4392,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    position: 'relative',
+    overflow: 'visible',
   },
   deliveredCardHeader: {
     flexDirection: 'row',
