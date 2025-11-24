@@ -11,6 +11,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  AppState,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
@@ -199,6 +200,30 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
       // setSearchResults(null); // Keep search results as user might want to keep them
     }
   }, [resetNavigationTrigger]);
+
+  // AppState listener to refresh data when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      console.log('📱 [MenuScreen] AppState changed:', nextAppState);
+      
+      // When app comes to foreground (active), refresh data
+      if (nextAppState === 'active') {
+        console.log('🔄 [MenuScreen] App became active, refreshing data from backend');
+        // Refresh categories to get latest data
+        if (categories.length > 0) {
+          // Only refresh if we already have data (not on first load)
+          console.log('🔄 [MenuScreen] Silently refreshing categories in background');
+          fetchCategories(1, false).catch(err => {
+            console.error('❌ [MenuScreen] Error refreshing on app foreground:', err);
+          });
+        }
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [categories.length]);
 
   // Load cached data on mount
   useEffect(() => {
@@ -2381,45 +2406,37 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
 
   // Show AddAddonsScreen when configuring add-ons
   if (showAddAddons) {
-  // console.log('🔧 [MenuScreen] Rendering AddAddonsScreen');
-  // console.log('🔧 [MenuScreen] Selected item ID:', selectedItemId);
-  // console.log('🔧 [MenuScreen] Selected category ID:', selectedCategoryId);
-  // console.log('🔧 [MenuScreen] Has pendingItemData:', !!pendingItemData);
-  // console.log('🔧 [MenuScreen] Has editingItem:', !!editingItem);
+    console.log('🔧 [MenuScreen] Rendering AddAddonsScreen');
+    console.log('🔧 [MenuScreen] Selected item ID:', selectedItemId);
+    console.log('🔧 [MenuScreen] Selected category ID:', selectedCategoryId);
+    console.log('🔧 [MenuScreen] Has pendingItemData:', !!pendingItemData);
+    console.log('🔧 [MenuScreen] Has editingItem:', !!editingItem);
     
-    // Prioritize fresh data from API (pendingItemData/editingItem) over stale categories data
-    let latestItemData = pendingItemData || editingItem;
-  // console.log('🔧 [MenuScreen] Initial latestItemData source:', pendingItemData ? 'pendingItemData' : editingItem ? 'editingItem' : 'none');
+    // Always fetch fresh item data from categories first
+    let latestItemData = null;
     
-    // Only use categories data if we don't have fresh data from API
-    if (!latestItemData && selectedItemId && selectedCategoryId) {
-  // console.log('🔧 [MenuScreen] Looking for item in categories');
+    // First priority: Look for latest data in categories (most recent from backend)
+    if (selectedItemId && selectedCategoryId) {
       const category = categories.find(c => c.id === selectedCategoryId);
-  // console.log('🔧 [MenuScreen] Category found:', category?.name);
       const latestItem = category?.items.find(i => i.id === selectedItemId);
-  // console.log('🔧 [MenuScreen] Latest item found:', latestItem?.name);
       
       if (latestItem) {
         latestItemData = {
           ...latestItem,
           categoryId: selectedCategoryId,
-          add_ons: latestItem.add_ons || [], // Explicitly include add_ons array
+          add_ons: latestItem.add_ons || [],
         };
-  // console.log('📱 [MenuScreen] Using item data from categories for AddAddonsScreen (no fresh data available)');
-  // console.log('📱 [MenuScreen] Latest item ID:', latestItemData.id);
-  // console.log('📱 [MenuScreen] Latest item add_ons:', latestItemData.add_ons && latestItemData.add_ons.length > 0 ? JSON.stringify(latestItemData.add_ons, null, 2) : 'none');
-  // console.log('📱 [MenuScreen] Latest item add_ons count:', latestItemData.add_ons ? latestItemData.add_ons.length : 0);
-      } else {
-        console.warn('⚠️ [MenuScreen] Latest item not found in categories for ID:', selectedItemId);
+        console.log('✅ [MenuScreen] Using latest item data from categories');
+        console.log('✅ [MenuScreen] Add-ons count:', latestItemData.add_ons?.length || 0);
       }
-    } else if (latestItemData) {
-  // console.log('📱 [MenuScreen] Using fresh item data from API (pendingItemData/editingItem) for AddAddonsScreen');
-  // console.log('📱 [MenuScreen] Item ID:', latestItemData.id);
-  // console.log('📱 [MenuScreen] Item add_ons:', latestItemData.add_ons && latestItemData.add_ons.length > 0 ? JSON.stringify(latestItemData.add_ons, null, 2) : 'none');
-  // console.log('📱 [MenuScreen] Item add_ons count:', latestItemData.add_ons ? latestItemData.add_ons.length : 0);
-    } else {
-  // console.log('📱 [MenuScreen] No item data available for AddAddonsScreen');
     }
+    
+    // Second priority: Use pendingItemData or editingItem only if not found in categories
+    if (!latestItemData) {
+      latestItemData = pendingItemData || editingItem;
+      console.log('⚠️ [MenuScreen] Using fallback data (pendingItemData/editingItem)');
+    }
+
     
     return (
       <AddAddonsScreen

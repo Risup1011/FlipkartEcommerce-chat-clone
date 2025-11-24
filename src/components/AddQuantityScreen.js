@@ -15,10 +15,8 @@ import CustomHeader from './CustomHeader';
 import CustomDropdown from './CustomDropdown';
 import { fetchWithAuth } from '../utils/apiHelpers';
 import { API_BASE_URL } from '../config';
-import { useToast } from './ToastContext';
-
 const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variantType = 'QUANTITY', variantTitle = 'Quantity', itemData = null, configData = null }) => {
-    const [variantOptions, setVariantOptions] = useState([
+  const [variantOptions, setVariantOptions] = useState([
     {
       id: Date.now(),
       name: '',
@@ -31,6 +29,10 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [existingVariantId, setExistingVariantId] = useState(null); // Track if we're editing an existing variant
+  const [errors, setErrors] = useState({
+    variantTitle: false,
+    options: {}, // { optionId: { name: false, itemPrice: false, additionalPrice: false } }
+  });
   const [variantSettings, setVariantSettings] = useState({
     is_mandatory: true,
     min_selection: 1,
@@ -283,40 +285,59 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
   };
 
   const handleSavePress = async () => {
-    // Validation
-    const hasEmptyNames = variantOptions.some((opt) => !opt.name.trim());
-    if (hasEmptyNames) {
-      const errorMsg = getUILabel('variant_option_name_required', 'Please enter a name for all variant options');
-      return;
+    // Reset errors
+    const newErrors = {
+      variantTitle: false,
+      options: {},
+    };
+
+    // Validate variant title - use editable title for CUSTOM variants
+    const titleToUse = variantType === 'CUSTOM' ? editableVariantTitle : variantTitle;
+    if (variantType === 'CUSTOM' && (!titleToUse || titleToUse.trim() === '')) {
+      newErrors.variantTitle = true;
     }
 
-    const hasInvalidPrices = variantOptions.some((opt) => {
+    // Validation
+    let hasErrors = false;
+    variantOptions.forEach((opt) => {
+      newErrors.options[opt.id] = {
+        name: false,
+        itemPrice: false,
+        additionalPrice: false,
+      };
+
+      if (!opt.name.trim()) {
+        newErrors.options[opt.id].name = true;
+        hasErrors = true;
+      }
+
       const basePrice = parseFloat(opt.itemPrice);
       const additionalPrice = parseFloat(opt.additionalPrice);
-      return (
-        !opt.itemPrice || 
-        opt.itemPrice.trim() === '' || 
-        isNaN(basePrice) || 
-        basePrice < 0 ||
-        isNaN(additionalPrice) ||
-        additionalPrice < 0
-      );
+
+      if (!opt.itemPrice || opt.itemPrice.trim() === '' || isNaN(basePrice) || basePrice < 0) {
+        newErrors.options[opt.id].itemPrice = true;
+        hasErrors = true;
+      }
+
+      if (opt.additionalPrice && opt.additionalPrice.trim() !== '' && (isNaN(additionalPrice) || additionalPrice < 0)) {
+        newErrors.options[opt.id].additionalPrice = true;
+        hasErrors = true;
+      }
     });
-    if (hasInvalidPrices) {
-      const errorMsg = getUILabel('variant_price_required', 'Please enter valid prices (numbers >= 0) for all variant options');
+
+    if (newErrors.variantTitle) {
+      hasErrors = true;
+    }
+
+    setErrors(newErrors);
+
+    if (hasErrors) {
       return;
     }
 
     // Check if itemData and itemId are available
     if (!itemData || !itemData.id) {
       const errorMsg = getUILabel('item_data_missing', 'Item data is missing. Please save the item first.');
-      return;
-    }
-
-    // Validate variant title - use editable title for CUSTOM variants
-    const titleToUse = variantType === 'CUSTOM' ? editableVariantTitle : variantTitle;
-    if (!titleToUse || titleToUse.trim() === '') {
-      const errorMsg = getUILabel('variant_title_required', 'Variant title is required');
       return;
     }
 
@@ -520,13 +541,25 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
             {getUILabel('variant_group_title_label', 'Title of the variant group')}{variantType === 'CUSTOM' && <Text style={styles.asterisk}> *</Text>}
           </Text>
           {variantType === 'CUSTOM' ? (
-            <TextInput
-              style={styles.variantTitleInput}
-              placeholder={getUILabel('variant_group_title_placeholder', 'Enter variant group title')}
-              placeholderTextColor="#999"
-              value={editableVariantTitle}
-              onChangeText={setEditableVariantTitle}
-            />
+            <>
+              <TextInput
+                style={[styles.variantTitleInput, errors.variantTitle && styles.inputError]}
+                placeholder={getUILabel('variant_group_title_placeholder', 'Enter variant group title')}
+                placeholderTextColor="#999"
+                value={editableVariantTitle}
+                onChangeText={(text) => {
+                  setEditableVariantTitle(text);
+                  if (errors.variantTitle) {
+                    setErrors((prev) => ({ ...prev, variantTitle: false }));
+                  }
+                }}
+              />
+              {errors.variantTitle && (
+                <Text style={styles.errorText}>
+                  {getUILabel('variant_title_required', 'Variant title is required')}
+                </Text>
+              )}
+            </>
           ) : (
             <Text style={styles.variantTitle}>{variantTitle}</Text>
           )}
@@ -541,14 +574,28 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
               {/* Option Name */}
               <View style={styles.optionHeader}>
                 <TextInput
-                  style={styles.optionNameInput}
+                  style={[styles.optionNameInput, errors.options[option.id]?.name && styles.inputError]}
                   placeholder={getUILabel('option_name_placeholder', 'Option name')}
                   placeholderTextColor="#999"
                   value={option.name}
-                  onChangeText={(text) =>
-                    handleUpdateOption(option.id, 'name', text)
-                  }
+                  onChangeText={(text) => {
+                    handleUpdateOption(option.id, 'name', text);
+                    if (errors.options[option.id]?.name) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        options: {
+                          ...prev.options,
+                          [option.id]: { ...prev.options[option.id], name: false },
+                        },
+                      }));
+                    }
+                  }}
                 />
+                {errors.options[option.id]?.name && (
+                  <Text style={styles.errorText}>
+                    {getUILabel('option_name_required', 'Option name is required')}
+                  </Text>
+                )}
               </View>
 
               {/* Item Type Dropdown */}
@@ -567,38 +614,66 @@ const AddQuantityScreen = ({ onBack, onSave, onDelete: onDeleteCallback, variant
               <View style={styles.priceRow}>
                 <View style={styles.priceField}>
                   <Text style={styles.priceLabel}>{getUILabel('item_price_label', 'Item Price')}</Text>
-                  <View style={styles.priceInputContainer}>
+                  <View style={[styles.priceInputContainer, errors.options[option.id]?.itemPrice && styles.inputError]}>
                     <Text style={styles.currencySymbol}>₹</Text>
                     <TextInput
                       style={styles.priceInput}
                       placeholder="0.00"
                       placeholderTextColor="#999"
                       value={option.itemPrice}
-                      onChangeText={(text) =>
-                        handleUpdateOption(option.id, 'itemPrice', text)
-                      }
+                      onChangeText={(text) => {
+                        handleUpdateOption(option.id, 'itemPrice', text);
+                        if (errors.options[option.id]?.itemPrice) {
+                          setErrors((prev) => ({
+                            ...prev,
+                            options: {
+                              ...prev.options,
+                              [option.id]: { ...prev.options[option.id], itemPrice: false },
+                            },
+                          }));
+                        }
+                      }}
                       keyboardType="decimal-pad"
                     />
                   </View>
+                  {errors.options[option.id]?.itemPrice && (
+                    <Text style={styles.errorText}>
+                      {getUILabel('item_price_required', 'Valid price required')}
+                    </Text>
+                  )}
                 </View>
 
                 <Text style={styles.plusSign}>+</Text>
 
                 <View style={styles.priceField}>
                   <Text style={styles.priceLabel}>{getUILabel('additional_price_label', 'Additional Price')}</Text>
-                  <View style={styles.priceInputContainer}>
+                  <View style={[styles.priceInputContainer, errors.options[option.id]?.additionalPrice && styles.inputError]}>
                     <Text style={styles.currencySymbol}>₹</Text>
                     <TextInput
                       style={styles.priceInput}
                       placeholder="0.00"
                       placeholderTextColor="#999"
                       value={option.additionalPrice}
-                      onChangeText={(text) =>
-                        handleUpdateOption(option.id, 'additionalPrice', text)
-                      }
+                      onChangeText={(text) => {
+                        handleUpdateOption(option.id, 'additionalPrice', text);
+                        if (errors.options[option.id]?.additionalPrice) {
+                          setErrors((prev) => ({
+                            ...prev,
+                            options: {
+                              ...prev.options,
+                              [option.id]: { ...prev.options[option.id], additionalPrice: false },
+                            },
+                          }));
+                        }
+                      }}
                       keyboardType="decimal-pad"
                     />
                   </View>
+                  {errors.options[option.id]?.additionalPrice && (
+                    <Text style={styles.errorText}>
+                      {getUILabel('additional_price_invalid', 'Invalid price')}
+                    </Text>
+                  )}
                 </View>
               </View>
 
@@ -867,6 +942,16 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.6,
+  },
+  inputError: {
+    borderColor: '#FF0000',
+    borderWidth: 1.5,
+  },
+  errorText: {
+    fontFamily: Poppins.regular,
+    fontSize: 12,
+    color: '#FF0000',
+    marginTop: 4,
   },
 });
 

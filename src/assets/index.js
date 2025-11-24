@@ -11,6 +11,11 @@ export const images = {
   rightArrow: require('./images/right-arrow.png'),
   barGraph: require('./images/Bargraph.png'),
   lineGraph: require('./images/line-graph.png'),
+  preparing: require('./images/Preparing.png'),
+  ready: require('./images/Ready.png'),
+  pickedUp: require('./images/Pickedup.png'),
+  pastOrders: require('./images/past.png'),
+  headerLogo: require('./images/Headdd.png'),
 };
 
 // Icons

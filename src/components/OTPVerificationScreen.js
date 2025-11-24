@@ -143,7 +143,7 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
   );
   
   const partnerText = useMemo(() => 
-    screenData?.partner_text || 'Earn. Grow. Conn', 
+    screenData?.partner_text || 'Earn. Grow. Connect', 
     [screenData?.partner_text]
   );
   

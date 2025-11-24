@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Alert,
 } from 'react-native';
 import { Poppins, icons } from '../assets';
 import CustomHeader from './CustomHeader';
@@ -184,7 +185,7 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
       console.log('📥 [AddAddonsScreen] Update Add-ons API Response:', JSON.stringify(data, null, 2));
 
       if (response.ok && (data.code === 200 || data.status === 'success')) {
-        const successMsg = getUILabel('addon_settings_saved_success', 'Customization settings saved successfully');
+        console.log('✅ [AddAddonsScreen] Settings saved successfully');
         
         // Use the updated item data from response if available
         if (data.data) {
@@ -212,13 +213,19 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
             // Still show success since settings were saved
           }
         }
+        
+        // Navigate back after successful save
+        console.log('✅ [AddAddonsScreen] Navigating back after successful save');
+        onBack();
       } else {
         const errorMessage = data.message || data.error || 'Failed to update add-on settings';
         console.error('❌ [AddAddonsScreen] Failed to update add-ons:', errorMessage);
+        Alert.alert('Error', errorMessage);
       }
     } catch (error) {
       console.error('❌ [AddAddonsScreen] Error saving customization settings:', error);
       const errorMsg = getUILabel('addon_save_settings_error', 'Failed to save customization settings');
+      Alert.alert('Error', errorMsg);
     } finally {
       setIsSaving(false);
     }
