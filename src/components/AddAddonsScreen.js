@@ -288,6 +288,17 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
 
   // Show AddOnsSelectionScreen when navigating to add-ons selection
   if (showAddOnsSelection) {
+    const itemDataWithAddons = {
+      ...itemData,
+      add_ons: linkedAddons, // Pass the linked add-ons explicitly
+    };
+    console.log('🔍 [AddAddonsScreen] Passing to AddOnsSelectionScreen:', {
+      itemId: itemData?.id,
+      linkedAddonsCount: linkedAddons.length,
+      linkedAddons: linkedAddons,
+      itemDataWithAddons: itemDataWithAddons,
+    });
+    
     return (
       <AddOnsSelectionScreen
         onBack={() => setShowAddOnsSelection(false)}
@@ -302,7 +313,7 @@ const AddAddonsScreen = ({ onBack, onSave, onNavigate, onDelete: onDeleteCallbac
           }
           setShowAddOnsSelection(false);
         }}
-        itemData={itemData}
+        itemData={itemDataWithAddons}
         customizationData={{
           selection_type: isCompulsory ? 'MANDATORY' : 'OPTIONAL',
           min_selection: isCompulsory ? parseInt(minSelection) || 1 : 0,

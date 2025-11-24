@@ -41,13 +41,19 @@ const AddOnsSelectionScreen = ({
       const data = await response.json();
 
       if (response.ok && (data.code === 200 || data.code === 201) && data.status === 'success') {
-        const mappedAddons = (data.data || []).map((addon) => ({
-          id: addon.id,
-          name: addon.name || '',
-          price: addon.additional_price || 0,
-          isVeg: addon.item_type === 'VEG',
-          item_type: addon.item_type || 'VEG',
-        }));
+        const mappedAddons = (data.data || []).map((addon) => {
+          // Ensure ID type consistency - keep as number if it's a number
+          const addonId = addon.id;
+          console.log('🔍 [AddOnsSelectionScreen] Fetched addon:', { id: addonId, name: addon.name, type: typeof addonId });
+          
+          return {
+            id: addonId,
+            name: addon.name || '',
+            price: addon.additional_price || 0,
+            isVeg: addon.item_type === 'VEG',
+            item_type: addon.item_type || 'VEG',
+          };
+        });
 
         setAddons(mappedAddons);
       } else {
@@ -68,11 +74,32 @@ const AddOnsSelectionScreen = ({
 
   // Pre-select add-ons that are already linked to the item
   useEffect(() => {
+    console.log('🔍 [AddOnsSelectionScreen] Pre-selection useEffect triggered');
+    console.log('🔍 [AddOnsSelectionScreen] itemData:', itemData);
+    console.log('🔍 [AddOnsSelectionScreen] addons.length:', addons.length);
+    
     if (itemData && itemData.add_ons && Array.isArray(itemData.add_ons) && addons.length > 0) {
-      const linkedAddonIds = new Set(
-        itemData.add_ons.map((linkedAddon) => linkedAddon.add_on_id || linkedAddon.id)
-      );
+      console.log('🔍 [AddOnsSelectionScreen] Pre-selecting add-ons from itemData:', itemData.add_ons);
+      
+      const linkedAddonIds = new Set();
+      itemData.add_ons.forEach((linkedAddon) => {
+        // Try multiple possible id fields
+        const addonId = linkedAddon.add_on_id || linkedAddon.addon_id || linkedAddon.id;
+        if (addonId) {
+          linkedAddonIds.add(addonId);
+          console.log('✅ [AddOnsSelectionScreen] Pre-selecting addon ID:', addonId, 'Type:', typeof addonId);
+        }
+      });
+      
+      console.log('🔍 [AddOnsSelectionScreen] Total pre-selected IDs:', Array.from(linkedAddonIds));
+      console.log('🔍 [AddOnsSelectionScreen] Setting selectedAddons to:', linkedAddonIds);
       setSelectedAddons(linkedAddonIds);
+    } else {
+      console.log('⚠️ [AddOnsSelectionScreen] Pre-selection conditions not met');
+      if (!itemData) console.log('⚠️ [AddOnsSelectionScreen] No itemData');
+      if (!itemData?.add_ons) console.log('⚠️ [AddOnsSelectionScreen] No add_ons in itemData');
+      if (!Array.isArray(itemData?.add_ons)) console.log('⚠️ [AddOnsSelectionScreen] add_ons is not an array');
+      if (addons.length === 0) console.log('⚠️ [AddOnsSelectionScreen] addons array is empty');
     }
   }, [itemData, addons]);
 

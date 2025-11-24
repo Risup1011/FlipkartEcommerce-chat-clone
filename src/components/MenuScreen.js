@@ -2363,9 +2363,28 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
 
   // Show AddOnsSelectionScreen when selecting add-ons to link
   if (showAddOnsSelection) {
-  // console.log('🔗 [MenuScreen] Rendering AddOnsSelectionScreen');
-  // console.log('🔗 [MenuScreen] Item data:', pendingItemData || editingItem);
-  // console.log('🔗 [MenuScreen] Customization data:', currentVariantConfig?.customizationData);
+    // Get full item data from categories (which includes add_ons)
+    const basicItemData = pendingItemData || editingItem;
+    let fullItemData = basicItemData;
+    
+    // Try to find the item in categories to get the full data with add_ons
+    if (basicItemData?.id && selectedCategoryId) {
+      const category = categories.find(cat => cat.id === selectedCategoryId);
+      if (category?.items) {
+        const itemInCategory = category.items.find(item => item.id === basicItemData.id);
+        if (itemInCategory) {
+          fullItemData = itemInCategory;
+          console.log('✅ [MenuScreen] Found full item data in categories with add_ons:', itemInCategory.add_ons?.length || 0);
+        }
+      }
+    }
+    
+    const itemToPass = fullItemData;
+    console.log('🔗 [MenuScreen] Rendering AddOnsSelectionScreen');
+    console.log('🔗 [MenuScreen] Item data:', itemToPass);
+    console.log('🔗 [MenuScreen] Has add_ons:', !!itemToPass?.add_ons);
+    console.log('🔗 [MenuScreen] Add-ons count:', itemToPass?.add_ons?.length || 0);
+    console.log('🔗 [MenuScreen] Add-ons:', itemToPass?.add_ons);
     
     return (
       <AddOnsSelectionScreen
@@ -2398,7 +2417,7 @@ const MenuScreen = ({ partnerStatus, onNavigateToOrders, resetNavigationTrigger,
           setShowAddAddons(true);
   // console.log('✅ [MenuScreen] Navigated to AddAddonsScreen');
         }}
-        itemData={pendingItemData || editingItem}
+        itemData={itemToPass}
         customizationData={currentVariantConfig?.customizationData}
       />
     );
