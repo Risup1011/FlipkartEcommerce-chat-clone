@@ -65,7 +65,6 @@ const PrepTimeScreen = ({ onBack, configData }) => {
 
   const handleSave = async () => {
     try {
-      setIsSaving(true);
       const prepTimeMinutes = parseInt(prepTime, 10);
 
       if (isNaN(prepTimeMinutes) || prepTimeMinutes < 0) {
@@ -73,30 +72,38 @@ const PrepTimeScreen = ({ onBack, configData }) => {
         return;
       }
 
-      const url = `${API_BASE_URL}v1/settings/prep-time`;
+      // Optimistic update - navigate back immediately
+      console.log('✅ [PrepTimeScreen] Optimistic update: Prep time set to', prepTimeMinutes, 'minutes');
+      const successMessage = getUILabel('prep_time_updated_success', 'Prep time updated successfully');
+      
+      if (onBack) {
+        onBack();
+      }
 
-      const response = await fetchWithAuth(url, {
+      // Send API call in background (fire and forget)
+      const url = `${API_BASE_URL}v1/settings/prep-time`;
+      
+      fetchWithAuth(url, {
         method: 'PATCH',
         body: JSON.stringify({
           prep_time_minutes: prepTimeMinutes,
         }),
-      });
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.code === 200 && data.status === 'success') {
+            console.log('✅ [PrepTimeScreen] Background API: Prep time updated successfully on backend');
+          } else {
+            console.error('❌ [PrepTimeScreen] Background API: Failed to update prep time on backend:', data.message);
+          }
+        })
+        .catch(error => {
+          console.error('❌ [PrepTimeScreen] Background API: Error updating prep time:', error);
+        });
 
-      const data = await response.json();
-
-      if (response.ok && data.code === 200 && data.status === 'success') {
-        const successMessage = getUILabel('prep_time_updated_success', 'Prep time updated successfully');
-        if (onBack) {
-          onBack();
-        }
-      } else {
-        const errorMessage = data.message || getUILabel('update_prep_time_error', 'Failed to update prep time');
-      }
     } catch (error) {
-      console.error('❌ [PrepTimeScreen] Error updating prep time:', error);
+      console.error('❌ [PrepTimeScreen] Error in handleSave:', error);
       const errorMessage = getUILabel('update_prep_time_error', 'Failed to update prep time');
-    } finally {
-      setIsSaving(false);
     }
   };
 

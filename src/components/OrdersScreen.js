@@ -10,7 +10,6 @@ import {
   Switch,
   FlatList,
   ActivityIndicator,
-  RefreshControl,
   Modal,
   Platform,
   Vibration,
@@ -65,7 +64,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     CANCELLED: [],
   });
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastNewOrdersCount, setLastNewOrdersCount] = useState(0);
   const pollingIntervalRef = useRef(null);
   const [showTimePickerModal, setShowTimePickerModal] = useState(false);
@@ -1019,8 +1017,24 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     }
   };
 
-  // Countdown timer component for preparing orders
-  const PreparingCountdown = ({ estimatedReadyTime }) => {
+  // Display preparation time component for preparing orders (shows minutes from backend)
+  const PreparingTimeDisplay = ({ estimatedTime }) => {
+    // Display preparation time in minutes from backend
+    const minutes = estimatedTime || 0;
+    
+    if (!minutes || minutes === 0) {
+      return <Text style={styles.markReadyButtonTextNew}>Mark ready</Text>;
+    }
+
+    return (
+      <Text style={styles.markReadyButtonTextNew}>
+        Mark ready in {minutes} min
+      </Text>
+    );
+  };
+
+  // Old countdown timer component - kept for reference but not used
+  const PreparingCountdown_OLD = ({ estimatedReadyTime }) => {
     const [countdown, setCountdown] = useState(null);
     const targetMsRef = useRef(null);
 
@@ -1253,18 +1267,33 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     }
   };
 
-  // Update preparation time API
+  // Update preparation time API with optimistic updates
   const handleUpdatePreparationTime = async (orderId, minutes) => {
     if (!orderId) {
       return;
     }
 
-    setIsUpdatingTime(true);
     try {
-      const url = `${API_BASE_URL}v1/orders/${orderId}/preparation-time`;
-      console.log(`📡 [OrdersScreen] Updating preparation time: ${orderId} to ${minutes} minutes`);
+      console.log(`✅ [OrdersScreen] Optimistic update: Setting prep time to ${minutes} minutes for order ${orderId}`);
+      
+      // Optimistic update - update UI immediately
+      setOrdersByStatus(prev => ({
+        ...prev,
+        PREPARING: prev.PREPARING.map(order => 
+          order.id === orderId 
+            ? { ...order, estimatedTime: minutes, preparationTimeMinutes: minutes }
+            : order
+        ),
+      }));
+      
+      // Close modal immediately
+      setShowTimePickerModal(false);
+      setSelectedOrderForTimeUpdate(null);
 
-      const response = await fetchWithAuth(url, {
+      // Send API call in background (fire and forget)
+      const url = `${API_BASE_URL}v1/orders/${orderId}/preparation-time`;
+      
+      fetchWithAuth(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1272,29 +1301,21 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         body: JSON.stringify({
           preparation_time_minutes: minutes,
         }),
-      });
+      })
+        .then(response => response.json())
+        .then(responseData => {
+          if (responseData?.code === 200) {
+            console.log(`✅ [OrdersScreen] Background API: Preparation time updated successfully on backend`);
+          } else {
+            console.error(`❌ [OrdersScreen] Background API: Failed to update preparation time:`, responseData);
+          }
+        })
+        .catch(error => {
+          console.error(`❌ [OrdersScreen] Background API: Error updating preparation time:`, error);
+        });
 
-      const responseData = await response.json();
-
-      if (response.ok && responseData?.code === 200) {
-        console.log(`✅ [OrdersScreen] Preparation time updated successfully`);
-        
-        // Close modal
-        setShowTimePickerModal(false);
-        setSelectedOrderForTimeUpdate(null);
-        
-        // Refresh orders after updating time
-        setTimeout(() => {
-          fetchOrdersForTab(activeTab);
-        }, 1000);
-      } else {
-        console.error(`❌ [OrdersScreen] Failed to update preparation time:`, response.status, responseData);
-        const errorMessage = responseData?.message || 'Failed to update preparation time';
-      }
     } catch (error) {
-      console.error(`❌ [OrdersScreen] Error updating preparation time:`, error);
-    } finally {
-      setIsUpdatingTime(false);
+      console.error(`❌ [OrdersScreen] Error in handleUpdatePreparationTime:`, error);
     }
   };
 
@@ -1798,7 +1819,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
             {loadingOrderIds.has(order.id) ? (
               <ActivityIndicator size="small" color="#8B4513" />
             ) : (
-              <PreparingCountdown estimatedReadyTime={order.estimatedReadyTime} />
+              <PreparingTimeDisplay estimatedTime={order.estimatedTime} />
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -2601,19 +2622,6 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
                   <FlatList
                     data={orders}
                     keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-                    refreshControl={
-                      <RefreshControl
-                        refreshing={isRefreshing}
-                        onRefresh={async () => {
-                          setIsRefreshing(true);
-                          await fetchOrdersForTab(activeTab);
-                          await fetchNewOrders();
-                          setIsRefreshing(false);
-                        }}
-                        colors={['#FF6E1A']}
-                        tintColor="#FF6E1A"
-                      />
-                    }
                      renderItem={({ item: order }) => {
                        // Render different card based on status
                        if (order.status === 'NEW') {
