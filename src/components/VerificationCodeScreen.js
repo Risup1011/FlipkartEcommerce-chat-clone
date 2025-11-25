@@ -19,6 +19,7 @@ import { useToast } from './ToastContext';
 import { API_BASE_URL, MOCK_OTP_PARTNER_STATUS, MOCK_OTP_CODE, MOCK_OTP_ENDPOINTS, USE_MOCK_OTP_ENDPOINTS } from '../config';
 import { getDeviceInfo } from '../utils/deviceInfo';
 import { storeTokens } from '../utils/tokenStorage';
+import { getFCMToken } from '../utils/notificationService';
 
 const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onResendOTP }) => {
   const [codes, setCodes] = useState(['', '', '', '']);
@@ -243,11 +244,37 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
     try {
       // Get device information
       const deviceInfo = await getDeviceInfo();
+      
+      // Get FCM token for push notifications (temporarily disabled until google-services.json is added)
+      let fcmToken = null;
+      try {
+        fcmToken = await getFCMToken();
+        if (fcmToken) {
+          console.log('🔔 [VerificationCodeScreen] FCM Token obtained: YES');
+          console.log('📋 [VerificationCodeScreen] FCM TOKEN FOR POSTMAN:');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log(fcmToken);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('💡 Copy the token above and use it in Postman for testing');
+          
+          // Show Alert with FCM token for easy copying
+          Alert.alert(
+            '✅ FCM Token Obtained',
+            `Token copied to logs. Check Metro bundler to copy token for Postman.\n\nToken: ${fcmToken.substring(0, 50)}...`,
+            [{ text: 'OK' }]
+          );
+        } else {
+          console.log('🔔 [VerificationCodeScreen] FCM Token obtained: NO');
+        }
+      } catch (error) {
+        console.log('🔔 [VerificationCodeScreen] FCM not configured yet - push notifications disabled');
+      }
 
       const requestBody = {
         otp_id: otpData.otp_id,
         otp: otpCode,
         device_id: deviceInfo.device_id,
+        fcm_token: fcmToken, // Add FCM token to request (null if Firebase not configured)
         device_info: deviceInfo.device_info,
       };
 

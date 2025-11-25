@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { StatusBar, AppState } from 'react-native'
+import { StatusBar, AppState, Alert } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Provider } from 'react-redux'
 import { store } from './src/store'
@@ -9,6 +9,7 @@ import { CountryPicker } from 'react-native-country-codes-picker'
 import { API_BASE_URL } from './src/config'
 import { getAccessToken, isAuthenticated, clearTokens } from './src/utils/tokenStorage'
 import { fetchWithAuth } from './src/utils/apiHelpers'
+import { initializeNotifications } from './src/utils/notificationService'
 
 const OTP_STORAGE_KEY = '@Kamai24:otpData'
 const PHONE_STORAGE_KEY = '@Kamai24:phoneNumber'
@@ -38,6 +39,28 @@ export default function App() {
       setIsSplashVisible(false)
     }, 3000)
 
+    // Initialize push notifications
+    console.log('🔔 [App] Initializing push notifications...');
+    const unsubscribeNotifications = initializeNotifications((remoteMessage) => {
+      console.log('🔔 [App] Notification received:', remoteMessage);
+      const notificationType = remoteMessage?.data?.notification_type || remoteMessage?.data?.type;
+      if (notificationType === 'order' || notificationType === 'NEW_ORDER') {
+        console.log('🔔 [App] New order notification - navigating to Orders screen');
+        if (AppState.currentState === 'active') {
+          Alert.alert(
+            remoteMessage?.notification?.title || 'New Order',
+            remoteMessage?.notification?.body || 'You have received a new order!',
+            [
+              { text: 'View', onPress: () => { setCurrentScreen('orders'); setOrdersInitialTab('new'); setOrdersInitialBottomTab('orders'); } },
+              { text: 'Dismiss', style: 'cancel' }
+            ]
+          );
+        } else {
+          setCurrentScreen('orders'); setOrdersInitialTab('new'); setOrdersInitialBottomTab('orders');
+        }
+      }
+    });
+
     // Listen for app state changes to clear Redux data when app closes
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
@@ -53,6 +76,7 @@ export default function App() {
     return () => {
       clearTimeout(timer);
       subscription?.remove();
+      unsubscribeNotifications?.();
     }
   }, [])
 
