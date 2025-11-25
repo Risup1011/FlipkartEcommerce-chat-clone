@@ -63,6 +63,15 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
       }
       
 
+      // Handle 403 Forbidden - expected before authentication, use fallback silently
+      if (response.status === 403) {
+        console.log('ℹ️ [VerificationCodeScreen] Endpoint requires authentication (403) - Using fallback text');
+        // Continue with fallback text - this is expected before user logs in
+        setScreenData(null);
+        setLoadingScreenData(false);
+        return;
+      }
+
       // Handle 500 errors (server errors) - continue with fallback
       if (response.status === 500) {
         console.warn('⚠️ [VerificationCodeScreen] Server Error (500) - Using fallback text');
@@ -89,10 +98,13 @@ const VerificationCodeScreen = ({ phoneNumber, otpData, onBack, onConfirm, onRes
           setScreenData(null);
         }
       } else {
-        console.warn('⚠️ [VerificationCodeScreen] API Call Failed - Using fallback text');
-        console.warn('⚠️ [VerificationCodeScreen] Response Status:', response.status);
-        console.warn('⚠️ [VerificationCodeScreen] Error Code:', data.code || data.status);
-        console.warn('⚠️ [VerificationCodeScreen] Error Message:', data.message || data.error);
+        // Only log as warning if it's not a 403 (which is expected)
+        if (response.status !== 403) {
+          console.warn('⚠️ [VerificationCodeScreen] API Call Failed - Using fallback text');
+          console.warn('⚠️ [VerificationCodeScreen] Response Status:', response.status);
+          console.warn('⚠️ [VerificationCodeScreen] Error Code:', data.code || data.status);
+          console.warn('⚠️ [VerificationCodeScreen] Error Message:', data.message || data.error);
+        }
         // Continue with fallback text if API fails
         setScreenData(null);
       }

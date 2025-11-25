@@ -9,10 +9,10 @@
 // export const API_BASE_URL = 'https://www.mockachino.com/ccff380f-7ee5-47/';
 
 // Option 2: Staging API (production-like environment)
-export const API_BASE_URL = 'http://kamai24-stage.eba-aejbahak.ap-south-1.elasticbeanstalk.com/partner/api/';
+export const API_BASE_URL = 'http://kamai24-stage-alb-967244288.ap-south-1.elb.amazonaws.com/partner/api/';
 
 // Rider API Base URL (for rider-specific endpoints)
-export const RIDER_API_BASE_URL = 'http://kamai24-stage.eba-aejbahak.ap-south-1.elasticbeanstalk.com/rider/api/';
+export const RIDER_API_BASE_URL = 'http://kamai24-stage-alb-967244288.ap-south-1.elb.amazonaws.com/rider/api/';
 
 // Default Rider ID for partner app to use when calling rider API endpoints
 // TODO: This should be replaced with actual rider ID from order assignment or user context

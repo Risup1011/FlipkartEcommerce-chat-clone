@@ -5,10 +5,19 @@
         <domain includeSubdomains="true">kamai24-stage.eba-aejbahak.ap-south-1.elasticbeanstalk.com</domain>
     </domain-config>
     
-    <!-- For development: Allow all cleartext traffic (remove in production) -->
+    <!-- Allow HTTP traffic for the ALB staging API domain -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">kamai24-stage-alb-967244288.ap-south-1.elb.amazonaws.com</domain>
+    </domain-config>
+    
+    <!-- Base config: Allow cleartext for development and trust system certificates -->
+    <!-- For staging: This allows HTTPS connections even with certificate domain mismatches -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
+            <!-- Trust system certificates -->
             <certificates src="system" />
+            <!-- Trust user certificates (allows certificate domain mismatches in staging) -->
+            <certificates src="user" />
         </trust-anchors>
     </base-config>
 </network-security-config>

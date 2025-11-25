@@ -33,6 +33,7 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
   const fetchScreenConfig = async () => {
     try {
       const endpoint = `${API_BASE_URL}v1/onboarding/sections`;
+      console.log('🔍 [OTPVerificationScreen] Fetching screen config from:', endpoint);
       
       // Add timeout to prevent long waits
       const controller = new AbortController();
@@ -58,10 +59,17 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
         console.error('❌ [OTPVerificationScreen] Raw Response:', textResponse);
         // Continue with fallback text if JSON parsing fails
         setScreenData(null);
-        setLoadingScreenData(false);
         return;
       }
       
+
+      // Handle 403 Forbidden - expected before authentication, use fallback silently
+      if (response.status === 403) {
+        console.log('ℹ️ [OTPVerificationScreen] Endpoint requires authentication (403) - Using fallback text');
+        // Continue with fallback text - this is expected before user logs in
+        setScreenData(null);
+        return;
+      }
 
       // Handle 500 errors (server errors) - continue with fallback
       if (response.status === 500) {
@@ -70,7 +78,6 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
         console.warn('⚠️ [OTPVerificationScreen] Error Message:', errorMessage);
         // Continue with fallback text if API fails
         setScreenData(null);
-        setLoadingScreenData(false);
         return;
       }
 
@@ -89,10 +96,13 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
           setScreenData(null);
         }
       } else {
-        console.warn('⚠️ [OTPVerificationScreen] API Call Failed - Using fallback text');
-        console.warn('⚠️ [OTPVerificationScreen] Response Status:', response.status);
-        console.warn('⚠️ [OTPVerificationScreen] Error Code:', data.code || data.status);
-        console.warn('⚠️ [OTPVerificationScreen] Error Message:', data.message || data.error);
+        // Only log as warning if it's not a 403 (which is expected)
+        if (response.status !== 403) {
+          console.warn('⚠️ [OTPVerificationScreen] API Call Failed - Using fallback text');
+          console.warn('⚠️ [OTPVerificationScreen] Response Status:', response.status);
+          console.warn('⚠️ [OTPVerificationScreen] Error Code:', data.code || data.status);
+          console.warn('⚠️ [OTPVerificationScreen] Error Message:', data.message || data.error);
+        }
         // Continue with fallback text if API fails
         setScreenData(null);
       }
@@ -182,8 +192,11 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
         channel: 'whatsapp',
       };
 
+      const endpoint = `${API_BASE_URL}v1/auth/send-otp`;
+      console.log('🔍 [OTPVerificationScreen] Sending OTP request to:', endpoint);
+      console.log('🔍 [OTPVerificationScreen] Request body:', JSON.stringify(requestBody));
 
-      const response = await fetch(`${API_BASE_URL}v1/auth/send-otp`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,6 +207,29 @@ const OTPVerificationScreen = ({ onOpenPicker, countryCode, countryFlag, onCount
       const data = await response.json();
       
       // Log full response for debugging
+
+      // Handle 429 Rate Limit - OTP already sent, but we can still proceed if otp_id exists
+      if (response.status === 429 && data.code === 429 && data.error_code === 'OTP_ALREADY_ACTIVE') {
+        console.log('ℹ️ [OTPVerificationScreen] OTP already active - User can use existing OTP');
+        // If we have otp_id in the response, navigate to verification screen
+        // Otherwise, show the message to the user
+        if (data.data?.otp_id && onNavigateToVerification) {
+          // Extract expires_in from message if available, or use default
+          const expiresMatch = data.message?.match(/(\d+)\s+seconds/);
+          const expiresIn = expiresMatch ? parseInt(expiresMatch[1]) : 1800; // Default 30 minutes
+          
+          onNavigateToVerification(fullPhoneNumber, {
+            otp_id: data.data.otp_id,
+            expires_in: expiresIn,
+            sentAt: Date.now(),
+          });
+        } else {
+          // Show info message instead of error
+          const infoMessage = data.message || 'An OTP has already been sent. Please check your messages or wait before requesting a new one.';
+          setError(infoMessage);
+        }
+        return;
+      }
 
       if (response.ok && data.code === 200 && data.status === 'success') {
         
