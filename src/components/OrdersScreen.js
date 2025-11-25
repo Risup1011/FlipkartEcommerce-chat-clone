@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import LinearGradient from 'react-native-linear-gradient';
 import { Poppins, icons, images } from '../assets';
 import NewOrdersScreen from './NewOrdersScreen';
 import MenuScreen from './MenuScreen';
@@ -37,10 +38,11 @@ try {
   // Sound library not available
 }
 
-const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceived, onLogout, initialTab, initialBottomTab, onNavigate }) => {
+const OrdersScreen = forwardRef(({ onBack, partnerStatus, newOrders = [], onNewOrderReceived, onLogout, initialTab, initialBottomTab, onNavigate }, ref) => {
     const [isOnline, setIsOnline] = useState(true);
   const [isTogglingOnline, setIsTogglingOnline] = useState(false);
-  const [activeTab, setActiveTab] = useState(initialTab || 'preparing');
+  // Never set activeTab to 'new' - NEW orders only show in banner modal
+  const [activeTab, setActiveTab] = useState((initialTab === 'new' ? 'preparing' : initialTab) || 'preparing');
   const [activeBottomTab, setActiveBottomTab] = useState(initialBottomTab || 'orders');
   const [orderCount, setOrderCount] = useState(0);
   const [showNewOrdersModal, setShowNewOrdersModal] = useState(false);
@@ -77,6 +79,20 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
   const [invoicePdfUrl, setInvoicePdfUrl] = useState(null);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(false);
   const [useDirectPdf, setUseDirectPdf] = useState(false);
+
+  // Expose showNewOrderBanner method to parent via ref
+  useImperativeHandle(ref, () => ({
+    showNewOrderBanner: async () => {
+      console.log('🔔 [OrdersScreen] showNewOrderBanner called from App.js');
+      playNotificationSound();
+      const fetchedOrders = await fetchNewOrders();
+      const ordersToShow = fetchedOrders && fetchedOrders.length > 0 ? fetchedOrders : (ordersByStatus.NEW || []);
+      console.log('🔔 [OrdersScreen] Orders to show in banner:', ordersToShow.length);
+      setPendingOrders(ordersToShow);
+      setShowNewOrdersModal(true);
+      console.log('🔔 [OrdersScreen] Modal state set to TRUE - modal should now be visible!');
+    }
+  }));
 
   // Handle online toggle with API call
   const handleOnlineToggle = async (value) => {
@@ -655,26 +671,8 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       console.log(`🟢 [OrdersScreen] New count: ${newOrders.length}`);
       console.log(`🟢 [OrdersScreen] Banner count updated: ${previousCount} → ${newOrders.length}`);
       
-      // Check if there are new orders that weren't there before (auto-open modal only for new arrivals)
-      if (newOrders.length > lastNewOrdersCount && lastNewOrdersCount > 0) {
-        // New orders arrived - show modal automatically
-        const newlyArrived = newOrders.slice(lastNewOrdersCount);
-        console.log(`🆕 [OrdersScreen] ${newlyArrived.length} new order(s) arrived - auto-opening modal`);
-        setPendingOrders(newlyArrived);
-        setShowNewOrdersModal(true);
-        if (onNewOrderReceived) {
-          onNewOrderReceived(newlyArrived);
-        }
-      } else if (newOrders.length > 0 && lastNewOrdersCount === 0) {
-        // First load with orders - show modal automatically
-        console.log(`🆕 [OrdersScreen] First load with ${newOrders.length} order(s) - auto-opening modal`);
-        setPendingOrders(newOrders);
-        setShowNewOrdersModal(true);
-        if (onNewOrderReceived) {
-          onNewOrderReceived(newOrders);
-        }
-      }
-      
+      // Don't auto-open modal - let notification or manual click handle it
+      // Just update the count for the banner badge
       setLastNewOrdersCount(newOrders.length);
       
       console.log('✅ [OrdersScreen] ========================================');
@@ -693,24 +691,13 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
     }
   };
 
-  // Watch for new orders and automatically open the modal
+  // Track newOrders length changes but don't auto-open modal
+  // Modal should only open via notification or manual banner click
   useEffect(() => {
     if (newOrders && newOrders.length > 0) {
-      // Check if there are actually new orders (not just initial load)
-      // Also open if this is the first time we see orders (initial load with orders)
-      const isNewOrder = newOrders.length > previousOrdersLengthRef.current;
-      const isFirstLoad = previousOrdersLengthRef.current === 0 && newOrders.length > 0;
-      
-      if (isNewOrder || isFirstLoad) {
-        setPendingOrders(newOrders);
-        setShowNewOrdersModal(true);
-        if (onNewOrderReceived) {
-          onNewOrderReceived(newOrders);
-        }
-      }
       previousOrdersLengthRef.current = newOrders.length;
     }
-  }, [newOrders, onNewOrderReceived]);
+  }, [newOrders]);
 
   // Fetch config data on component mount
   useEffect(() => {
@@ -2648,7 +2635,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
 
       {/* New Order Notification Banner */}
       <TouchableOpacity
-        style={styles.newOrderBanner}
+        style={styles.newOrderBannerContainer}
         onPress={async () => {
           console.log('🟢 [OrdersScreen] ========================================');
           console.log('🟢 [OrdersScreen] GREEN BANNER CLICKED');
@@ -2683,21 +2670,28 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
         }}
         activeOpacity={0.8}
       >
-        <Image
-          source={images.newOrder}
-          style={styles.newOrderBannerIcon}
-          resizeMode="contain"
-        />
-        <Text style={styles.newOrderBannerText}>
-          {orderCount > 0 
-            ? `You have ${orderCount} new order${orderCount > 1 ? 's' : ''}` 
-            : 'You have a new order'}
-        </Text>
-        <Image
-          source={images.rightArrow}
-          style={[styles.newOrderBannerArrowIcon, { tintColor: '#FFFFFF' }]}
-          resizeMode="contain"
-        />
+        <LinearGradient
+          colors={['#4CAF50', '#FFFFFF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.newOrderBanner}
+        >
+          <Image
+            source={images.newOrder}
+            style={styles.newOrderBannerIcon}
+            resizeMode="contain"
+          />
+          <Text style={styles.newOrderBannerText}>
+            {orderCount > 0 
+              ? `You have ${orderCount} new order${orderCount > 1 ? 's' : ''}` 
+              : 'You have a new order'}
+          </Text>
+          <Image
+            source={require('../assets/icon/bell.png')}
+            style={{ width: 32, height: 32, marginLeft: 8 }}
+            resizeMode="contain"
+          />
+        </LinearGradient>
       </TouchableOpacity>
 
       {/* Bottom Navigation Bar */}
@@ -3018,7 +3012,7 @@ const OrdersScreen = ({ onBack, partnerStatus, newOrders = [], onNewOrderReceive
       </Modal>
     </SafeAreaView>
   );
-};
+});
 
 // Get screen dimensions for responsive design
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -3522,22 +3516,27 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#000000',
   },
-  newOrderBanner: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
+  newOrderBannerContainer: {
     marginHorizontal: 0,
-    marginBottom: 10,
+    marginBottom: 0,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
+    overflow: 'hidden',
+  },
+  newOrderBanner: {
+    paddingVertical: 2,
+    paddingHorizontal: 20,
+    minHeight: 80,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   newOrderBannerIcon: {
-    width: 40,
-    height: 40,
+    width: 56,
+    height: 56,
     marginRight: 12,
+    marginTop: 0,
+    marginBottom: 0,
   },
   newOrderBannerText: {
     fontFamily: Poppins.medium,

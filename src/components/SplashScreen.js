@@ -1,18 +1,31 @@
-import React from 'react';
-import { View, Image, StyleSheet, Dimensions, SafeAreaView } from 'react-native';
 
-const { width } = Dimensions.get('window');
 
-const SplashScreen = () => {
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, SafeAreaView } from 'react-native';
+import Video from 'react-native-video';
+
+const SplashScreen = ({ onFinish }) => {
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+      if (onFinish) onFinish();
+    }, 8000); // 5 seconds
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!showSplash) return null;
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Image
-          source={require('../assets/images/SplashIcon.png')}
-          style={styles.icon}
-          resizeMode="contain"
-        />
-      </View>
+      <Video
+        source={require('../assets/images/AnimatedSplashScreen.mp4')}
+        style={styles.video}
+        resizeMode="cover"
+        repeat
+        muted
+      />
     </SafeAreaView>
   );
 };
@@ -22,16 +35,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  content: {
+  video: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  icon: {
-    width: width * 0.6,
-    height: width * 0.6,
-    maxWidth: 300,
-    maxHeight: 300,
+    width: '100%',
+    height: '100%',
   },
 });
 

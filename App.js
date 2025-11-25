@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { StatusBar, AppState, Alert } from 'react-native'
+import React, { useState, useEffect, useRef } from 'react'
+import { StatusBar, AppState, Alert, InteractionManager } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Provider } from 'react-redux'
 import { store } from './src/store'
@@ -29,6 +29,7 @@ export default function App() {
   const [configData, setConfigData] = useState(null) // Store config data for passing to screens
   const [ordersInitialTab, setOrdersInitialTab] = useState(null) // Store initial tab for OrdersScreen
   const [ordersInitialBottomTab, setOrdersInitialBottomTab] = useState(null) // Store initial bottom tab for OrdersScreen
+  const ordersScreenRef = useRef(null) // Ref to access OrdersScreen methods
 
   useEffect(() => {
     // Check session and onboarding status on app start
@@ -45,19 +46,24 @@ export default function App() {
       console.log('🔔 [App] Notification received:', remoteMessage);
       const notificationType = remoteMessage?.data?.notification_type || remoteMessage?.data?.type;
       if (notificationType === 'order' || notificationType === 'NEW_ORDER') {
-        console.log('🔔 [App] New order notification - navigating to Orders screen');
-        if (AppState.currentState === 'active') {
-          Alert.alert(
-            remoteMessage?.notification?.title || 'New Order',
-            remoteMessage?.notification?.body || 'You have received a new order!',
-            [
-              { text: 'View', onPress: () => { setCurrentScreen('orders'); setOrdersInitialTab('new'); setOrdersInitialBottomTab('orders'); } },
-              { text: 'Dismiss', style: 'cancel' }
-            ]
-          );
-        } else {
-          setCurrentScreen('orders'); setOrdersInitialTab('new'); setOrdersInitialBottomTab('orders');
-        }
+        console.log('🔔 [App] New order notification - opening banner modal');
+        console.log('🔔 [App] AppState:', AppState.currentState);
+        console.log('🔔 [App] ordersScreenRef.current exists:', !!ordersScreenRef.current);
+        
+        // Navigate to orders screen first
+        setCurrentScreen('orders');
+        setOrdersInitialBottomTab('orders');
+        
+        // Trigger banner modal with longer delay to ensure screen is mounted
+        setTimeout(() => {
+          console.log('🔔 [App] Attempting to show banner...');
+          console.log('🔔 [App] ordersScreenRef.current exists now:', !!ordersScreenRef.current);
+          if (ordersScreenRef.current) {
+            ordersScreenRef.current.showNewOrderBanner();
+          } else {
+            console.warn('⚠️ [App] ordersScreenRef.current is still null after navigation');
+          }
+        }, 500);
       }
     });
 
@@ -795,6 +801,7 @@ export default function App() {
         />
       ) : currentScreen === 'orders' ? (
         <OrdersScreen
+          ref={ordersScreenRef}
           partnerStatus={partnerStatus}
           onLogout={handleLogout}
           initialTab={ordersInitialTab}
